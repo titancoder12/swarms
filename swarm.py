@@ -462,8 +462,8 @@ def main():
             #if OBJECT_IN_GOAL:
             #    boid.flock(boids, blocks, movable_object, target_position)
             boid.flock(boids, blocks, objects, target_position)
-            boid.push_object(objects, target_position)
-            boid.apply_force(boid.attract_to_object(boids, objects, target_position))
+            #boid.push_object(objects, target_position)
+            #boid.apply_force(boid.attract_to_object(boids, objects, target_position))
             boid.update(blocks, WIDTH, HEIGHT)
             boid.resolve_collision_with_ball(objects)
             boid.draw(screen)
