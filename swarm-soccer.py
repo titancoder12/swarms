@@ -17,43 +17,231 @@ ATTRACTION_RADIUS = 100
 OBJECTS_IN_GOAL = False  # Flag to check if all objects are in the goal
 BROADCAST_RADIUS = 400
 
+def render_UI(screen, boids):
+    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
+    font = pygame.font.SysFont(None, 15)
+
+    a = 140
+    b = 10
+    c = 50
+    d = 10
+
+    button_add_boids = pygame.Rect(a, b, c, d)  # Button to add boids
+    button_remove_boids = pygame.Rect(a+60, b, c, d)  # Button to remove boids
+    button_add_speed = pygame.Rect(a, b+20, c, d)  # Button to increase speed
+    button_remove_speed = pygame.Rect(a+60, b+20, c, d)
+    button_add_force = pygame.Rect(a, b+40, c, d)  # Button to increase force
+    button_remove_force = pygame.Rect(a+60, b+40, c, d)
+    button_add_neighbor_radius = pygame.Rect(a, b+60, c, d)
+    button_remove_neighbor_radius = pygame.Rect(a+60, b+60, c, d)
+    button_add_separation_radius = pygame.Rect(a, b+80, c, d)
+    button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
+    button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
+    button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
+
+    pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
+    pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
+    pygame.draw.rect(screen, (255, 255, 255), button_add_speed)
+    pygame.draw.rect(screen, (255, 255, 255), button_remove_speed)
+    pygame.draw.rect(screen, (255, 255, 255), button_add_force)
+    pygame.draw.rect(screen, (255, 255, 255), button_remove_force)
+    pygame.draw.rect(screen, (255, 255, 255), button_add_neighbor_radius)
+    pygame.draw.rect(screen, (255, 255, 255), button_remove_neighbor_radius)
+    pygame.draw.rect(screen, (255, 255, 255), button_add_separation_radius)
+    pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
+    pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
+    pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
+
+    for button, label in [
+            (button_add_boids, "+"),
+            (button_remove_boids, "-"),
+            (button_add_speed, "+"),
+            (button_remove_speed, "-"),
+            (button_add_force, "+"),
+            (button_remove_force, "-"),
+            (button_add_neighbor_radius, "+"),
+            (button_remove_neighbor_radius, "-"),
+            (button_add_separation_radius, "+"),
+            (button_remove_separation_radius, "-"),
+            (button_add_object_separation_radius, "+"),
+            (button_remove_object_separation_radius, "-")
+        ]:
+            text = font.render(label, True, (0, 0, 0))  # Black text
+            text_rect = text.get_rect(center=button.center)
+            screen.blit(text, text_rect)
+
+    boid_count_text = font.render(f"Boids: {len(boids)}", True, (255, 255, 255))  # White text
+    max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
+    max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
+    neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
+    separation_radius_text = font.render(f"Separation Radius: {SEPARATION_RADIUS}", True, (255, 255, 255))
+    width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
+    height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
+    object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
+
+    # Draw it on screen at top-left
+    screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
+    screen.blit(max_speed_text, (10, 30))
+    screen.blit(max_force_text, (10, 50))
+    screen.blit(neighbor_radius_text, (10, 70))
+    screen.blit(separation_radius_text, (10, 90))
+    screen.blit(object_separation_radius_text, (10, 110))
+    screen.blit(width_text, (10, 130))
+    screen.blit(height_text, (10, 150))
+
+    return [
+        button_add_boids,
+        button_remove_boids,
+        button_add_speed,
+        button_remove_speed,
+        button_add_force,
+        button_remove_force,
+        button_add_neighbor_radius,
+        button_remove_neighbor_radius,
+        button_add_separation_radius,
+        button_remove_separation_radius,
+        button_add_object_separation_radius,
+        button_remove_object_separation_radius
+    ]
+
+# Declare mouse_held as a global variable
+mouse_held = False
+last_add_time = 0  # Initialize outside the function
+
+def manage_UI(buttons, boids, movable_objects):
+    global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, mouse_held, last_add_time
+    dragging_object = False  # Flag to check if an object is being dragged
+
+    button_add_boids = buttons[0]
+    button_remove_boids = buttons[1]
+    button_add_speed = buttons[2]
+    button_remove_speed = buttons[3]
+    button_add_force = buttons[4]
+    button_remove_force = buttons[5]
+    button_add_neighbor_radius = buttons[6]
+    button_remove_neighbor_radius = buttons[7]
+    button_add_separation_radius = buttons[8]
+    button_remove_separation_radius = buttons[9]
+    button_add_object_separation_radius = buttons[10]
+    button_remove_object_separation_radius = buttons[11]
+
+    # for event in pygame.event.get():
+    #     if event.type == pygame.QUIT:
+    #         return False
+    #     if event.type == pygame.VIDEORESIZE:
+    #         WIDTH, HEIGHT = event.w, event.h
+    #     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
+    #         mouse_held = True
+    #     elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+    #         mouse_held = False
+    #         dragging_object = False  # Stop dragging when mouse button is released
+    #     for movable_object in movable_objects:
+    #         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+    #             if (movable_object.position - pygame.Vector2(event.pos)).length() < movable_object.size:
+    #                 dragging_object = True
+    #         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+    #             dragging_object = False
+    #             movable_object.velocity = pygame.Vector2(0, 0)  # Stop the object when mouse is released
+    #         elif event.type == pygame.MOUSEMOTION and dragging_object:
+    #             # Move the object with the mouse
+    #             movable_object.position = pygame.Vector2(event.pos)
+    
+    dragging = False
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False
+        if event.type == pygame.VIDEORESIZE:
+            WIDTH, HEIGHT = event.w, event.h
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mouse_held = True
+            for obj in movable_objects:
+                if (obj.position - pygame.Vector2(event.pos)).length() < obj.size:
+                    obj.is_dragging = True
+                    dragging = True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            mouse_held = False
+            for obj in movable_objects:
+                obj.is_dragging = False
+                obj.velocity = pygame.Vector2(0, 0)
+                dragging = False
+        elif event.type == pygame.MOUSEMOTION:
+            for obj in movable_objects:
+                if obj.is_dragging:
+                    obj.position = pygame.Vector2(event.pos)
+                    dragging = True
+
+    # Get the current time
+    current_time = pygame.time.get_ticks()
+
+    # Check if the mouse is held and throttle actions
+    if not dragging and mouse_held and current_time - last_add_time > 50:  # 50ms delay
+        mouse_pos = pygame.mouse.get_pos()
+
+        if button_add_boids.collidepoint(mouse_pos):
+            new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+            boids.append(new_boid)
+        elif button_remove_boids.collidepoint(mouse_pos):
+            if boids:
+                boids.pop()
+        elif button_add_speed.collidepoint(mouse_pos):
+            MAX_SPEED += 1
+        elif button_remove_speed.collidepoint(mouse_pos):
+            if MAX_SPEED > 1:
+                MAX_SPEED -= 1
+        elif button_add_force.collidepoint(mouse_pos):
+            MAX_FORCE += 0.1
+        elif button_remove_force.collidepoint(mouse_pos):
+            if MAX_FORCE > 0.1:
+                MAX_FORCE -= 0.1
+        elif button_add_neighbor_radius.collidepoint(mouse_pos):
+            NEIGHBOR_RADIUS += 10
+        elif button_remove_neighbor_radius.collidepoint(mouse_pos):
+            if NEIGHBOR_RADIUS > 10:
+                NEIGHBOR_RADIUS -= 10
+        elif button_add_separation_radius.collidepoint(mouse_pos):
+            SEPARATION_RADIUS += 10
+        elif button_remove_separation_radius.collidepoint(mouse_pos):
+            if SEPARATION_RADIUS > 10:
+                SEPARATION_RADIUS -= 10
+        elif button_add_object_separation_radius.collidepoint(mouse_pos):
+            OBJECT_SEPERATION_RADIUS += 10
+        elif button_remove_object_separation_radius.collidepoint(mouse_pos):
+            if OBJECT_SEPERATION_RADIUS > 10:
+                OBJECT_SEPERATION_RADIUS -= 10
+
+        # Update the last action time
+        last_add_time = current_time
+
+    return True
+
 class MovableObject:
     def __init__(self, x, y):
         self.position = pygame.Vector2(x, y)
         self.velocity = pygame.Vector2(0, 0)
         self.size = 20  # radius for simplicity
         self.mass = 5
+        self.is_dragging = False  # Flag to check if the object is being dragged
 
     def update(self):
-        self.position += self.velocity
-        self.velocity *= 0.95  # friction / damping
-        if self.position.x <= 0 or self.position.x >= WIDTH:
-            self.velocity.x *= -1
-            # Clamp inside bounds
-            self.position.x = max(0, min(self.position.x, WIDTH))
+        if not self.is_dragging:
+            self.position += self.velocity
+            self.velocity *= 0.95  # friction / damping
+            if self.position.x <= 0 or self.position.x >= WIDTH:
+                self.velocity.x *= -1
+                # Clamp inside bounds
+                self.position.x = max(0, min(self.position.x, WIDTH))
 
-        if self.position.y <= 0 or self.position.y >= HEIGHT:
-            self.velocity.y *= -1
-            # Clamp inside bounds
-            self.position.y = max(0, min(self.position.y, HEIGHT))
+            if self.position.y <= 0 or self.position.y >= HEIGHT:
+                self.velocity.y *= -1
+                # Clamp inside bounds
+                self.position.y = max(0, min(self.position.y, HEIGHT))
 
     def apply_force(self, force):
-        self.velocity += force / self.mass
+        if not self.is_dragging:
+            self.velocity += force / self.mass
 
     def draw(self, screen):
         pygame.draw.circle(screen, (255, 255, 0), self.position, self.size)
-
-class Block:
-    def __init__(self, x, y):
-        self.position = pygame.Vector2(x, y)
-        self.color = (255, 255, 255)  # White color for the block
-        self.size = 20  # Size of the block
-
-    def draw(self, screen):
-        pygame.draw.rect(screen, self.color, (self.position.x, self.position.y, self.size, self.size))
-
-    def get_rect(self):
-        return pygame.Rect(self.position.x, self.position.y, self.size, self.size)
 
 class Boid:
     def __init__(self, x, y):
@@ -256,209 +444,6 @@ class Boid:
 
         pygame.draw.polygon(screen, self.color, points)
 
-def render_UI(screen, boids):
-    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
-    font = pygame.font.SysFont(None, 15)
-
-    a = 140
-    b = 10
-    c = 50
-    d = 10
-
-    button_add_boids = pygame.Rect(a, b, c, d)  # Button to add boids
-    button_remove_boids = pygame.Rect(a+60, b, c, d)  # Button to remove boids
-    button_add_speed = pygame.Rect(a, b+20, c, d)  # Button to increase speed
-    button_remove_speed = pygame.Rect(a+60, b+20, c, d)
-    button_add_force = pygame.Rect(a, b+40, c, d)  # Button to increase force
-    button_remove_force = pygame.Rect(a+60, b+40, c, d)
-    button_add_neighbor_radius = pygame.Rect(a, b+60, c, d)
-    button_remove_neighbor_radius = pygame.Rect(a+60, b+60, c, d)
-    button_add_separation_radius = pygame.Rect(a, b+80, c, d)
-    button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
-    button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
-    button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
-
-    pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_speed)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_speed)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_force)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_force)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_neighbor_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_neighbor_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
-
-    for button, label in [
-            (button_add_boids, "+"),
-            (button_remove_boids, "-"),
-            (button_add_speed, "+"),
-            (button_remove_speed, "-"),
-            (button_add_force, "+"),
-            (button_remove_force, "-"),
-            (button_add_neighbor_radius, "+"),
-            (button_remove_neighbor_radius, "-"),
-            (button_add_separation_radius, "+"),
-            (button_remove_separation_radius, "-"),
-            (button_add_object_separation_radius, "+"),
-            (button_remove_object_separation_radius, "-")
-        ]:
-            text = font.render(label, True, (0, 0, 0))  # Black text
-            text_rect = text.get_rect(center=button.center)
-            screen.blit(text, text_rect)
-
-    boid_count_text = font.render(f"Boids: {len(boids)}", True, (255, 255, 255))  # White text
-    max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
-    max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
-    neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
-    separation_radius_text = font.render(f"Separation Radius: {SEPARATION_RADIUS}", True, (255, 255, 255))
-    width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
-    height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
-    object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
-
-    # Draw it on screen at top-left
-    screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
-    screen.blit(max_speed_text, (10, 30))
-    screen.blit(max_force_text, (10, 50))
-    screen.blit(neighbor_radius_text, (10, 70))
-    screen.blit(separation_radius_text, (10, 90))
-    screen.blit(object_separation_radius_text, (10, 110))
-    screen.blit(width_text, (10, 130))
-    screen.blit(height_text, (10, 150))
-
-    return [
-        button_add_boids,
-        button_remove_boids,
-        button_add_speed,
-        button_remove_speed,
-        button_add_force,
-        button_remove_force,
-        button_add_neighbor_radius,
-        button_remove_neighbor_radius,
-        button_add_separation_radius,
-        button_remove_separation_radius,
-        button_add_object_separation_radius,
-        button_remove_object_separation_radius
-    ]
-
-def manage_UI(buttons, boids):
-
-    global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS
-
-    button_add_boids = buttons[0]
-    button_remove_boids = buttons[1]
-    button_add_speed = buttons[2]
-    button_remove_speed = buttons[3]
-    button_add_force = buttons[4]
-    button_remove_force = buttons[5]
-    button_add_neighbor_radius = buttons[6]
-    button_remove_neighbor_radius = buttons[7]
-    button_add_separation_radius = buttons[8]
-    button_remove_separation_radius = buttons[9]
-    button_add_object_separation_radius = buttons[10]
-    button_remove_object_separation_radius = buttons[11]
-
-    mouse_held=False
-    last_add_time = pygame.time.get_ticks()
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            return False
-        if event.type == pygame.KEYDOWN:
-            new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-            boids.append(new_boid)
-        if event.type == pygame.VIDEORESIZE:
-                WIDTH, HEIGHT = event.w, event.h
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
-            if button_add_boids.collidepoint(event.pos):
-                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-                boids.append(new_boid)
-
-            elif button_remove_boids.collidepoint(event.pos):
-                if boids:
-                    boids.pop()
-            elif button_add_speed.collidepoint(event.pos):
-                MAX_SPEED += 1
-            elif button_remove_speed.collidepoint(event.pos):
-                if MAX_SPEED > 1:
-                    MAX_SPEED -= 1
-            elif button_add_force.collidepoint(event.pos):
-                MAX_FORCE += 0.1
-            elif button_remove_force.collidepoint(event.pos):
-                if MAX_FORCE > 0.1:
-                    MAX_FORCE -= 0.1
-            elif button_add_neighbor_radius.collidepoint(event.pos):
-                NEIGHBOR_RADIUS += 10
-            elif button_remove_neighbor_radius.collidepoint(event.pos):
-                if NEIGHBOR_RADIUS > 10:
-                    NEIGHBOR_RADIUS -= 10
-            elif button_add_separation_radius.collidepoint(event.pos):
-                SEPARATION_RADIUS += 10
-            elif button_remove_separation_radius.collidepoint(event.pos):
-                if SEPARATION_RADIUS > 10:
-                    SEPARATION_RADIUS -= 10
-            elif button_add_object_separation_radius.collidepoint(event.pos):
-                OBJECT_SEPERATION_RADIUS += 10
-            elif button_remove_object_separation_radius.collidepoint(event.pos):
-                if OBJECT_SEPERATION_RADIUS > 10:
-                    OBJECT_SEPERATION_RADIUS -= 10
-            
-            mouse_held = True
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            mouse_held = False
-
-        current_time = pygame.time.get_ticks()
-
-        if current_time - last_add_time > 50:
-            if mouse_held and button_add_boids.collidepoint(pygame.mouse.get_pos()):
-                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-                boids.append(new_boid)
-                last_add_time = current_time
-            elif mouse_held and button_remove_boids.collidepoint(pygame.mouse.get_pos()):
-                if boids:
-                    boids.pop()
-                last_add_time = current_time
-            elif mouse_held and button_add_speed.collidepoint(pygame.mouse.get_pos()):
-                MAX_SPEED += 1
-                last_add_time = current_time
-            elif mouse_held and button_remove_speed.collidepoint(pygame.mouse.get_pos()):
-                if MAX_SPEED > 1:
-                    MAX_SPEED -= 1
-                last_add_time = current_time
-            elif mouse_held and button_add_force.collidepoint(pygame.mouse.get_pos()):
-                MAX_FORCE += 0.1
-                last_add_time = current_time
-            elif mouse_held and button_remove_force.collidepoint(pygame.mouse.get_pos()):
-                if MAX_FORCE > 0.1:
-                    MAX_FORCE -= 0.1
-                last_add_time = current_time
-            elif mouse_held and button_add_neighbor_radius.collidepoint(pygame.mouse.get_pos()):
-                NEIGHBOR_RADIUS += 10
-                last_add_time = current_time
-            elif mouse_held and button_remove_neighbor_radius.collidepoint(pygame.mouse.get_pos()):
-                if NEIGHBOR_RADIUS > 10:
-                    NEIGHBOR_RADIUS -= 10
-                last_add_time = current_time
-            elif mouse_held and button_add_separation_radius.collidepoint(pygame.mouse.get_pos()):
-                SEPARATION_RADIUS += 10
-                last_add_time = current_time
-            elif mouse_held and button_remove_separation_radius.collidepoint(pygame.mouse.get_pos()):
-                if SEPARATION_RADIUS > 10:
-                    SEPARATION_RADIUS -= 10
-                last_add_time = current_time
-            elif mouse_held and button_add_object_separation_radius.collidepoint(pygame.mouse.get_pos()):
-                OBJECT_SEPERATION_RADIUS += 10
-                last_add_time = current_time
-            elif mouse_held and button_remove_object_separation_radius.collidepoint(pygame.mouse.get_pos()):
-                if OBJECT_SEPERATION_RADIUS > 10:
-                    OBJECT_SEPERATION_RADIUS -= 10
-                last_add_time = current_time
-    
-    return True
-
-
 def main():
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, WIDTH, HEIGHT, OBJECT_SEPERATION_RADIUS, OBJECTS_IN_GOAL
     pygame.init()
@@ -486,7 +471,7 @@ def main():
         pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius, 3)  # Draw target circle
         
         buttons = render_UI(screen, boids)
-        running = manage_UI(buttons, boids)
+        running = manage_UI(buttons, boids, objects)
 
         # Update and draw boids
         for boid in boids:
