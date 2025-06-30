@@ -352,19 +352,25 @@ class Boid:
                 steering.scale_to_length(MAX_FORCE)
         return steering
 
-    def broadcast(self, boids, goal_location):
+    def broadcast(self, boids, blocks, objects, goal_location):
         for boid in boids:
             if boid != self and not boid.has_received and self.position.distance_to(boid.position) < BROADCAST_RADIUS:
-                boid.recieve(boids, goal_location)
+                boid.recieve(boids, blocks, objects, goal_location)
 
-    def recieve(self, boids, goal_location):
+    def recieve(self, boids, blocks, objects, goal_location):
         if not self.has_received:
             self.has_received = True
             self.color = (0, 255, 0)
-            self.broadcast(boids, goal_location)
+            self.broadcast(boids, blocks, objects, goal_location)
             self.goal_location = goal_location
             self.signal_time = pygame.time.get_ticks()
             self.apply_force(self.move_to_location(self.goal_location))
+            self.flock(boids, blocks, objects, self.goal_location)
+
+    def scatter(self, boids, blocks, objects, target_position):
+        self.apply_force(pygame.Vector2(random.uniform(-1, 1), random.uniform(-1, 1)) * MAX_FORCE)
+        self.push_object(objects, target_position)
+        self.apply_force(self.attract_to_object(boids, blocks, objects, target_position))
 
     def push_object(self, objects, goal):
         for obj in objects:
@@ -381,7 +387,7 @@ class Boid:
             steer.scale_to_length(MAX_FORCE)
         return steer
 
-    def attract_to_object(self, boids, objects, target_position):
+    def attract_to_object(self, boids, blocks, objects, target_position):
         closest_object = None
         min_distance = float('inf')
 
@@ -398,7 +404,7 @@ class Boid:
 
         # If a closest object is found and within the attraction radius
         if closest_object and min_distance < ATTRACTION_RADIUS:
-            self.broadcast(boids, closest_object.position)
+            self.broadcast(boids, blocks, objects, closest_object.position)
             return self.move_to_location(closest_object.position)
 
         return pygame.Vector2(0, 0)
@@ -429,8 +435,8 @@ class Boid:
         self.apply_force(cohesion * 1.0)
         self.apply_force(separation * 1.5)
         
-        self.push_object(objects, target_position)
-        self.apply_force(self.attract_to_object(boids, objects, target_position))
+        #self.push_object(objects, target_position)
+        #self.apply_force(self.attract_to_object(boids, objects, target_position))
 
 
     def draw(self, screen):
@@ -475,7 +481,8 @@ def main():
 
         # Update and draw boids
         for boid in boids:
-            boid.flock(boids, blocks, objects, target_position)
+            #boid.flock(boids, blocks, objects, target_position)
+            boid.scatter(boids, blocks, objects, target_position)
             boid.update(blocks, WIDTH, HEIGHT)
             boid.resolve_collision_with_ball(objects)
             boid.draw(screen)
