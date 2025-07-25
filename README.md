@@ -1,4 +1,4 @@
-# Swarm
+# Swarm Simulations
 
 ![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
 
