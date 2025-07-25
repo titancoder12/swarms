@@ -156,17 +156,6 @@ class Boid:
                 steering += diff
                 total += 1
             block = block.get_rect()
-
-                # Optional: move boid just outside the block to prevent sticking
-                #if self.velocity.x > 0:
-                #    self.position.x = block.left - 1
-                #else:
-                #    self.position.x = block.right + 1
-
-                #if self.velocity.y > 0:
-                #    self.position.y = block.top - 1
-                #else:
-                #    self.position.y = block.bottom + 1
         
         if total > 0:
             steering /= total
@@ -265,12 +254,7 @@ class Boid:
             self.position + pygame.Vector2(math.cos(angle + 2.5) * TRIANGLE_SIZE, math.sin(angle + 2.5) * TRIANGLE_SIZE),
             self.position + pygame.Vector2(math.cos(angle - 2.5) * TRIANGLE_SIZE, math.sin(angle - 2.5) * TRIANGLE_SIZE),
         ]
-        #bird_points = [
-        #    (400, 300),  # Beak (front)
-        #    (420, 320),  # Bottom wing tip
-        #    (400, 340),  # Tail
-        #    (380, 320),  # Top wing tip
-        #]
+
         pygame.draw.polygon(screen, self.color, points)
 
 def main():
@@ -300,8 +284,6 @@ def main():
     while running:
         current_time = pygame.time.get_ticks()
         screen.fill((0, 0, 0))  # Black background
-        #pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius, 3)
-        #pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius, 3)  # Draw target circle
 
         a = 140
         b = 10
@@ -363,8 +345,7 @@ def main():
                 new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
                 boids.append(new_boid)
             if event.type == pygame.VIDEORESIZE:
-                    WIDTH, HEIGHT = event.w, event.h
-                    #screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+                WIDTH, HEIGHT = event.w, event.h
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
                 if button_add_boids.collidepoint(event.pos):
                     new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
@@ -459,22 +440,14 @@ def main():
 
         # Update and draw boids
         for boid in boids:
-            #if OBJECT_IN_GOAL:
-            #    boid.flock(boids, blocks, movable_object, target_position)
             boid.flock(boids, blocks, target_position)
-            #boid.push_object(objects, target_position)
-            #boid.apply_force(boid.attract_to_object(boids, objects, target_position))
             boid.update(blocks, WIDTH, HEIGHT)
-            #boid.resolve_collision_with_ball(objects)
             boid.draw(screen)
             boid.has_received = False  # Reset the flag after each update
         
         for block in blocks:
             block.draw(screen)
-        
-        #for object in objects:
-        #    object.update()
-        #    object.draw(screen)
+
 
         # Display the number of boids
         # Render the text
@@ -498,11 +471,6 @@ def main():
         screen.blit(height_text, (10, 150))
         
         truths = []
-        #for object in objects:
-        #    if object.position.distance_to(target_position) < target_radius:
-        #        truths.append(True)
-        #    else:
-        #        truths.append(False)
         if truths == [True, True, True]:
             pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius)
             OBJECTS_IN_GOAL = True  # filled goal

@@ -16,6 +16,8 @@ TRIANGLE_SIZE = 5
 ATTRACTION_RADIUS = 100
 OBJECTS_IN_GOAL = False  # Flag to check if all objects are in the goal
 BROADCAST_RADIUS = 300
+TARGET_HOLD_TIME = 3000  # 3 seconds in milliseconds
+target_start_time = None  # Tracks when all objects entered the target
 
 def render_UI(screen, boids):
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
@@ -124,27 +126,6 @@ def manage_UI(buttons, boids, movable_objects):
     button_remove_separation_radius = buttons[9]
     button_add_object_separation_radius = buttons[10]
     button_remove_object_separation_radius = buttons[11]
-
-    # for event in pygame.event.get():
-    #     if event.type == pygame.QUIT:
-    #         return False
-    #     if event.type == pygame.VIDEORESIZE:
-    #         WIDTH, HEIGHT = event.w, event.h
-    #     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
-    #         mouse_held = True
-    #     elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-    #         mouse_held = False
-    #         dragging_object = False  # Stop dragging when mouse button is released
-    #     for movable_object in movable_objects:
-    #         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-    #             if (movable_object.position - pygame.Vector2(event.pos)).length() < movable_object.size:
-    #                 dragging_object = True
-    #         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-    #             dragging_object = False
-    #             movable_object.velocity = pygame.Vector2(0, 0)  # Stop the object when mouse is released
-    #         elif event.type == pygame.MOUSEMOTION and dragging_object:
-    #             # Move the object with the mouse
-    #             movable_object.position = pygame.Vector2(event.pos)
     
     dragging = False
     for event in pygame.event.get():
@@ -221,8 +202,13 @@ class MovableObject:
         self.size = 20  # radius for simplicity
         self.mass = 5
         self.is_dragging = False  # Flag to check if the object is being dragged
+        self.held_in_goal = False
+        self.last_goal_time = None
+        self.object_remains_in_goal_time = None  # Flag to check if an object remains in the goal for too long
+        #self.last_goal_time = None  # Track when the object was last in the goal
 
-    def update(self):
+    def update(self, target_position):
+        global TARGET_HOLD_TIME
         if not self.is_dragging:
             self.position += self.velocity
             self.velocity *= 0.95  # friction / damping
@@ -235,6 +221,14 @@ class MovableObject:
                 self.velocity.y *= -1
                 # Clamp inside bounds
                 self.position.y = max(0, min(self.position.y, HEIGHT))
+        if self.position == target_position:
+            if self.last_goal_time is None:
+                self.last_goal_time = pygame.time.get_ticks()
+            if pygame.time.get_ticks() - self.last_goal_time > TARGET_HOLD_TIME:
+                self.held_in_goal = True
+            self.last_goal_time = pygame.time.get_ticks()
+        else:
+            self.held_in_goal = False
 
     def apply_force(self, force):
         if not self.is_dragging:
@@ -254,6 +248,7 @@ class Boid:
         self.signal_time = pygame.time.get_ticks()
         self.goal_location = ()
         self.has_received = False  # Flag to check if boid has received a message
+        #self.object_remains_in_goal_time = None  # Flag to check if an object remains in the goal
 
     def update(self, blocks, WIDTH, HEIGHT):
         # Update velocity and position
@@ -364,6 +359,7 @@ class Boid:
             self.broadcast(boids, blocks, objects, goal_location)
             self.goal_location = goal_location
             self.signal_time = pygame.time.get_ticks()
+            self.attract_to_object(boids, blocks, objects, goal_location)
             self.apply_force(self.move_to_location(self.goal_location))
             self.flock(boids, blocks, objects, self.goal_location)
 
@@ -376,7 +372,11 @@ class Boid:
         for obj in objects:
             to_object = obj.position - self.position
             if to_object.length() < 30:
-                push_dir = (goal - obj.position).normalize()
+                # Modify this section in swarm-soccer.py
+                if (goal - obj.position).length() != 0:
+                    push_dir = (goal - obj.position).normalize()
+                else:
+                    push_dir = Vector2(0, 0)  # Or handle the zero-length vector appropriately
                 force = push_dir * OBJECT_PUSH_FORCE
                 obj.apply_force(force)
     
@@ -395,7 +395,13 @@ class Boid:
         for obj in objects:
             # Check if the object is in the goal
             if obj.position.distance_to(target_position) < 30:
-                continue  # Skip objects already in the goal
+                if obj.object_remains_in_goal_time is None:
+                    #print(f"None")
+                    obj.object_remains_in_goal_time = pygame.time.get_ticks()
+                    print("Object entered the goal")
+                elif pygame.time.get_ticks() - obj.object_remains_in_goal_time > 7000:
+                    print(f"Skipping object {obj.position} because it remains in the goal for too long")
+                    continue  # Permanently skip this object
 
             distance = self.position.distance_to(obj.position)
             if distance < min_distance:
@@ -434,10 +440,6 @@ class Boid:
         self.apply_force(alignment * 1.0)
         self.apply_force(cohesion * 1.0)
         self.apply_force(separation * 1.5)
-        
-        #self.push_object(objects, target_position)
-        #self.apply_force(self.attract_to_object(boids, objects, target_position))
-
 
     def draw(self, screen):
         # Draw a simple triangle for the boid
@@ -457,6 +459,7 @@ def main():
     pygame.display.set_caption("Swarm Simulation")
     clock = pygame.time.Clock()
     last_add_time = pygame.time.get_ticks()
+    init_goal_time = pygame.time.get_ticks()
 
     # Create boids
     boids = [Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(NUM_BOIDS)]
@@ -467,7 +470,7 @@ def main():
     objects = [movable_object_1, movable_object_2, movable_object_3]
     blocks = []
 
-    # Target position and radius for the movable object
+    # Target position
     target_position = pygame.Vector2(WIDTH - 100, HEIGHT - 100)
     target_radius = 40
 
@@ -481,7 +484,6 @@ def main():
 
         # Update and draw boids
         for boid in boids:
-            #boid.flock(boids, blocks, objects, target_position)
             boid.scatter(boids, blocks, objects, target_position)
             boid.update(blocks, WIDTH, HEIGHT)
             boid.resolve_collision_with_ball(objects)
@@ -491,25 +493,25 @@ def main():
         for block in blocks:
             block.draw(screen)
         
-        for object in objects:
-            object.update()
-            object.draw(screen)
+        for obj in objects:
+            obj.update(target_position)
+            obj.draw(screen)
         
-        truths = []
-        for object in objects:
-            if object.position.distance_to(target_position) < target_radius:
-                truths.append(True)
-            else:
-                truths.append(False)
-        if truths == [True, True, True]:
-            pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius)
-            OBJECTS_IN_GOAL = True  # filled goal
-            # Maybe show text: “Success!”
+        # Check if all objects are in the target
+        all_in_target = all(obj.position.distance_to(target_position) < target_radius for obj in objects)
         
+        if all_in_target:
+            if target_start_time is None:
+                target_start_time = pygame.time.get_ticks()  # Start the timer
+            elif pygame.time.get_ticks() - target_start_time >= TARGET_HOLD_TIME:
+                OBJECTS_IN_GOAL = True  # Set the goal flag after 3 seconds
+                pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius)  # Filled goal
+        else:
+            target_start_time = None  # Reset the timer if any object leaves the target
+
         pygame.display.flip()
         clock.tick(30)
 
     pygame.quit()
-
 if __name__ == "__main__":
     main()

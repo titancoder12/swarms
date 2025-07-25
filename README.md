@@ -1,5 +1,7 @@
 # Swarm
 
+![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
+
 ## Installation
 1. Clone the repository:
 ```
@@ -20,6 +22,8 @@ To run an example of swarm application, particularly in teamwork:
 ```
 python swarm-soccer.py
 ```
+
+A deployed version can also be found [here](https://replit.com/@babytitanlin/Swarm-Simulations).
 
 ## How does it work?
 This project simulates a swarm of autonomous agents (boids) interacting with movable objects in a 2D environment. The simulation is based on the principles of flocking behavior and object manipulation. Here's a simple breakdown of the features and concepts that define the simulation:
