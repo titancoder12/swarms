@@ -5,13 +5,18 @@
 ## Installation
 
 ### Install using UV
-1. Clone the repository:
+1. Create a new directory:
+    ```
+    mkdir swarms_test
+    cd swarms_test
+    ```
+2. Clone the repository:
     ```
     git clone https://github.com/titancoder12/swarms
     cd swarms
     ```
 
-2. Run the setup script:
+3. Run the setup script:
    
    **macOS/Linux:**
    ```
@@ -23,7 +28,7 @@
    setup-uv.bat
    ```
 
-3. Activate the environment:
+4. Activate the environment:
    
    **macOS/Linux:**
    ```
