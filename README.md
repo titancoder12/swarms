@@ -2,6 +2,53 @@
 
 ![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
 
+## Running the Simulation
+**Note: It takes quite long to launch. Please be patient.**
+**Note: The executible is built and tested only on MacOS.**
+
+### Download and run the executables.
+There are two executables for two types of swarms:
+Executable 1. Pure Swarm: 
+[download](https://drive.google.com/file/d/1oJgk7xt0dHocAXpRzU_tmRSDZpqCQ39L/view?usp=drive_link)
+Executable 2. Soccer Swarm:
+[download](https://drive.google.com/file/d/1QCGxuCZWEL1eOjKh03M5Cww9WggqVLOn/view?usp=drive_link)
+
+### You can also download the entire folder
+Click [here](https://drive.google.com/drive/folders/1dNAaib_xn4cwSS-aUe3-A7wl6IEqxnNz?usp=drive_link) and download the entire folder in Google Drive.
+
+## Cd into the directory
+Open up the terminal and navigate into the location you downloaded.
+
+Enter into the folder you downloaded by running:
+```
+cd dist
+```
+
+### Running the executible on macOS
+
+To run a normal swarm simulation, type:
+```
+./pure-swarm
+```
+To run an example of swarm application, particularly in teamwork:
+```
+./swarm-soccer
+```
+
+### Running the executible on Windows
+
+The Mac/Linux executibles without extensions cannot be run with Windows. 
+
+Try running it with `python`:
+```
+python pure-swarm.py
+python swarm-soccer.py
+```
+
+Click the plus symbol next to 'boids' to add a few autonomous agents. Try playing around with the other parameters as well!
+
+If there are any issues, the program can also be run on Replit by clicking [here](https://replit.com/@babytitanlin/Swarm-Simulations).
+
 ## Installation
 1. Create a directory for the project:
 
@@ -30,26 +77,10 @@
     cd swarms
     ```
 
-4. Install dependencies:
+4. Cd into the 'dist' directory:
     ```
-    pip install -r requirements.txt
+    cd dist
     ```
-
-## Running the Simulation
-**(Note, it may take a few seconds to launch.)**
-
-To run a normal swarm simulation, type:
-```
-python pure-swarm.py
-```
-To run an example of swarm application, particularly in teamwork:
-```
-python swarm-soccer.py
-```
-
-Click the plus symbol next to 'boids' to add a few autonomous agents. Try playing around with the other parameters as well!
-
-If there are any issues, the program can also be run on Replit by clicking [here](https://replit.com/@babytitanlin/Swarm-Simulations).
 
 ## Adjustable Parameters
 
