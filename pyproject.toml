@@ -1,0 +1,19 @@
+[project]
+name = "swarm-simulations"
+version = "0.1.0"
+description = "Swarm intelligence simulation with boids"
+requires-python = ">=3.8"
+dependencies = [
+    "pygame>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/titancoder12/swarms"
+Repository = "https://github.com/titancoder12/swarms"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []

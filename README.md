@@ -2,45 +2,68 @@
 
 ![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
 
-## Running the Simulation
-**Note: It takes quite long to launch. Please be patient.**
-**Note: The executible is built and tested only on MacOS.**
-
 ## Installation
-1. Create a directory for the project:
 
-    For example...
-    ```
-    mkdir example_dir
-    ```
-    Then, cd into the directory.
-    ```
-    cd example_dir
-    ```
-
-2. Clone the repository:
-    Clone the repo into the directory
+### Option 1: Using uv (Recommended - Fast and Modern)
+1. Clone the repository:
     ```
     git clone https://github.com/titancoder12/swarms
-    ```
-3. Cd into Swarms
-    ```
     cd swarms
     ```
-3. Activate the virtual environment:
+
+2. Run the setup script:
+   
+   **macOS/Linux:**
+   ```
+   ./setup-uv.sh
+   ```
+   
+   **Windows:**
+   ```
+   setup-uv.bat
+   ```
+
+3. Activate the environment:
+   
+   **macOS/Linux:**
+   ```
+   source .venv/bin/activate
+   ```
+   
+   **Windows:**
+   ```
+   .venv\Scripts\activate
+   ```
+
+### Option 2: Using pip (Traditional)
+1. Create a directory and clone:
     ```
-    ./start.sh
+    mkdir example_dir && cd example_dir
+    git clone https://github.com/titancoder12/swarms
+    cd swarms
     ```
 
+2. Set up virtual environment:
+   
+   **macOS/Linux:**
+   ```
+   ./start.sh
+   ```
+   
+   **Windows:**
+   ```
+   start.bat
+   ```
 
-## Running the Simulation
+## Running the Simulations
 **Note: It takes a few seconds to launch. Please be patient.**
-To run a normal swarm simulation, type:
 
+To run a demonstration of swarms and their algorithm, run:
 ```
 python pure-swarm.py
 ```
-To run an example of swarm application, particularly in teamwork:
+
+To run a demonstration of swarms working collectively to achieve a task, run:
 ```
 python swarm-soccer.py
 ```
