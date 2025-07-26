@@ -23,7 +23,10 @@
     ```
     git clone https://github.com/titancoder12/swarms
     ```
-
+3. Cd into Swarms
+    ```
+    cd swarms
+    ```
 3. Activate the virtual environment:
     ```
     ./start.sh
