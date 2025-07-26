@@ -377,7 +377,7 @@ class Boid:
                 if (goal - obj.position).length() != 0:
                     push_dir = (goal - obj.position).normalize()
                 else:
-                    push_dir = Vector2(0, 0)  # Or handle the zero-length vector appropriately
+                    push_dir = pygame.Vector2(0, 0)  # Fixed: Use pygame.Vector2 instead of Vector2
                 force = push_dir * OBJECT_PUSH_FORCE
                 obj.apply_force(force)
     

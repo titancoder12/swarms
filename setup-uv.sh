@@ -5,7 +5,16 @@ echo "Setting up Python environment with uv..."
 if ! command -v uv &> /dev/null; then
     echo "uv not found. Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    source $HOME/.cargo/env
+    
+    # Add uv to PATH for this session
+    export PATH="$HOME/.local/bin:$PATH"
+    
+    # Verify installation
+    if ! command -v uv &> /dev/null; then
+        echo "Error: uv installation failed. Please install manually:"
+        echo "Visit: https://docs.astral.sh/uv/getting-started/installation/"
+        exit 1
+    fi
 fi
 
 # Create virtual environment and install dependencies
