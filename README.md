@@ -18,30 +18,19 @@
 
 3. Run the setup script:
    
-   **macOS/Linux:**
    ```
    ./setup-uv.sh
-   ```
-   
-   **Windows:**
-   ```
-   setup-uv.bat
    ```
 
 4. Activate the environment:
    
-   **macOS/Linux:**
    ```
    source .venv/bin/activate
-   ```
-   
-   **Windows:**
-   ```
-   .venv\Scripts\activate
    ```
 
 ## Running the Simulations
 **Note: It takes a few seconds to launch. Please be patient.**
+**Note: This has only been tested on MacOS.***
 
 To run a demonstration of swarms and their algorithm, run:
 ```
