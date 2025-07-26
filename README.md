@@ -5,7 +5,7 @@
 ## Installation
 
 ### Install using UV
-1. Create a new directory:
+1. Create a new directory and cd into it:
     ```
     mkdir swarms_test
     ```
