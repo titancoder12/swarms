@@ -25,13 +25,14 @@
     git clone https://github.com/titancoder12/swarms
     ```
 
+5. Enter directory:
+    ```
+    cd swarms
+    ```
+
 4. Install dependencies:
     ```
     pip install -r requirements.txt
-    ```
-5. Enter directory to test the program:
-    ```
-    cd swarms
     ```
 
 ## Running the Simulation
