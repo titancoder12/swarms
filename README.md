@@ -34,7 +34,7 @@
 
 ## Running the Simulations
 **Note: It takes a few seconds to launch. Please be patient.**
-**Note: This has only been tested on MacOS.***
+**Note: This has only been tested on MacOS.**
 
 To run a demonstration of swarms and their algorithm, run:
 ```
