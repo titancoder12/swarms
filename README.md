@@ -3,15 +3,32 @@
 ![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
 
 ## Installation
-1. Clone the repository:
-```
-git clone https://github.com/titancoder12/swarms
-```
+1. Create a directory for the project:
 
-2. Install dependencies:
-```
-pip install -r requirements.txt
-```
+    For example...
+    ```
+    mkdir example_dir
+    ```
+    Then, cd into the directory.
+    ```
+    cd example_dir
+    ```
+
+2. (Optional) Create a virtual environment:
+    ```
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
+3. Clone the repository:
+    Clone the repo into the directory
+    ```
+    git clone https://github.com/titancoder12/swarms
+    ```
+
+4. Install dependencies:
+    ```
+    pip install -r requirements.txt
+    ```
 
 ## Running the Simulation
 To run a normal swarm simulation, type:
