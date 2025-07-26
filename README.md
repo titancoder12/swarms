@@ -4,7 +4,7 @@
 
 ## Installation
 
-### Option 1: Using uv (Recommended - Fast and Modern)
+### Install using UV
 1. Clone the repository:
     ```
     git clone https://github.com/titancoder12/swarms
@@ -33,26 +33,6 @@
    **Windows:**
    ```
    .venv\Scripts\activate
-   ```
-
-### Option 2: Using pip (Traditional)
-1. Create a directory and clone:
-    ```
-    mkdir example_dir && cd example_dir
-    git clone https://github.com/titancoder12/swarms
-    cd swarms
-    ```
-
-2. Set up virtual environment:
-   
-   **macOS/Linux:**
-   ```
-   ./start.sh
-   ```
-   
-   **Windows:**
-   ```
-   start.bat
    ```
 
 ## Running the Simulations

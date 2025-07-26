@@ -18,6 +18,4 @@ uv sync
 echo Setup complete! To activate the environment, run:
 echo .venv\Scripts\activate
 echo.
-echo Then you can run:
-echo python main.py
 pause

@@ -14,6 +14,3 @@ uv sync
 
 echo "Setup complete! To activate the environment, run:"
 echo "source .venv/bin/activate"
-echo ""
-echo "Then you can run:"
-echo "python main.py"
