@@ -25,7 +25,7 @@
     git clone https://github.com/titancoder12/swarms
     ```
 
-5. Enter directory:
+5. Cd into 'swarms' directory:
     ```
     cd swarms
     ```
