@@ -8,11 +8,15 @@
 1. Create a new directory:
     ```
     mkdir swarms_test
+    ```
+    ```
     cd swarms_test
     ```
-2. Clone the repository:
+2. Clone the repository and cd into swarms:
     ```
     git clone https://github.com/titancoder12/swarms
+    ```
+    ```
     cd swarms
     ```
 
