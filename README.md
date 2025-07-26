@@ -2,6 +2,10 @@
 
 ![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
 
+## Running the Simulation
+**Note: It takes quite long to launch. Please be patient.**
+**Note: The executible is built and tested only on MacOS.**
+
 ## Installation
 1. Create a directory for the project:
 
