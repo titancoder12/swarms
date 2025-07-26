@@ -2,7 +2,7 @@
 
 ![Swarm Simulation Screenshot](https://github.com/titancoder12/swarms/blob/main/Cover.png)
 
-## Installation
+## Installation [MacOS SUPPORT ONLY]
 
 ### Install using UV
 1. Create a new directory and cd into it:
