@@ -36,6 +36,8 @@
     ```
 
 ## Running the Simulation
+**(Note, it may take a few seconds to launch.)**
+
 To run a normal swarm simulation, type:
 ```
 python pure-swarm.py
@@ -44,8 +46,6 @@ To run an example of swarm application, particularly in teamwork:
 ```
 python swarm-soccer.py
 ```
-
-**Note, it may take a few seconds to launch.**
 
 Click the plus symbol next to 'boids' to add a few autonomous agents. Try playing around with the other parameters as well!
 
