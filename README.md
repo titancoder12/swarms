@@ -29,6 +29,10 @@
     ```
     pip install -r requirements.txt
     ```
+5. Enter directory to test the program:
+    ```
+    cd swarms
+    ```
 
 ## Running the Simulation
 To run a normal swarm simulation, type:
@@ -40,14 +44,38 @@ To run an example of swarm application, particularly in teamwork:
 python swarm-soccer.py
 ```
 
-A deployed version can also be found [here](https://replit.com/@babytitanlin/Swarm-Simulations).
+**Note, it may take a few seconds to launch.**
+
+Click the plus symbol next to 'boids' to add a few autonomous agents. Try playing around with the other parameters as well!
+
+If there are any issues, the program can also be run on Replit by clicking [here](https://replit.com/@babytitanlin/Swarm-Simulations).
+
+## Adjustable Parameters
+
+### **Boids**
+Controls the number of autonomous agents in the simulation. More boids create complex flocking behavior but may impact performance.
+
+### **Max Speed**
+Sets how fast boids can move. Higher values create faster, more erratic movement; lower values produce smoother motion.
+
+### **Max Force**
+Determines how quickly boids can change direction. Higher values allow sharp turns; lower values create gradual, realistic movement.
+
+### **Neighbor Radius**
+Defines how far boids can "see" other boids. Larger radius creates cohesive flocks; smaller radius results in scattered behavior.
+
+### **Separation Radius**
+Sets the minimum distance boids maintain from each other. Prevents overcrowding while maintaining group cohesion.
+
+### **Object Separation**
+Controls how far boids stay from obstacles and objects. Critical for object manipulation tasks in goal mode.
 
 ## How does it work?
 This project simulates a swarm of autonomous agents (boids) interacting with movable objects in a 2D environment. The simulation is based on the principles of flocking behavior and object manipulation. Here's a simple breakdown of the features and concepts that define the simulation:
 1. **Boid behavior**:
-    * Each boid follows three main rules to simulate natural flocking:
+    * Each boid follows [three main rules](https://en.wikipedia.org/wiki/Boids) to simulate natural flocking:
         * Alignment: Boids align their velocity with nearby boids.
-        * Cohesion : Boids move toward the average position of nearby boids
+        * Cohesion : Boids move toward the average position of nearby boids.
         * Seperation: Boids avoid crowding by steering away from nearby boids and obstacles.
     * These behaviors are combined with additional forces, such as attraction to objects or scattering, to achieve specific goals.
 
