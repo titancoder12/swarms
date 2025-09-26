@@ -1,13 +1,14 @@
 
 import pygame
+import os
 import random
 import math
 
 # Screen dimensions
 WIDTH, HEIGHT = 1000, 1000
 # Boid settings
-NUM_BOIDS = 0
-MAX_SPEED = 10
+NUM_BOIDS = 10
+MAX_SPEED = 5
 MAX_FORCE = 1
 OBJECT_PUSH_FORCE = 0.2
 NEIGHBOR_RADIUS = 200
@@ -16,9 +17,13 @@ OBJECT_SEPERATION_RADIUS = 50
 TRIANGLE_SIZE = 5
 ATTRACTION_RADIUS = 100
 OBJECTS_IN_GOAL = False  # Flag to check if all objects are in the goal
-BROADCAST_RADIUS = 300
+BROADCAST_RADIUS = 100
 TARGET_HOLD_TIME = 3000  # 3 seconds in milliseconds
 target_start_time = None  # Tracks when all objects entered the target
+QUEENS = 1
+WORKERS = 10
+LARVA = 0
+FOOD = 0
 
 def render_UI(screen, boids):
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
@@ -41,6 +46,8 @@ def render_UI(screen, boids):
     button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
     button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
     button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
+    button_hatch_worker = pygame.Rect(a+60, b+240, c+40, d)
+    button_hatch_queen = pygame.Rect(a+60, b+260, c+40, d)
 
     pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
     pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
@@ -54,6 +61,8 @@ def render_UI(screen, boids):
     pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
     pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
     pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
+    pygame.draw.rect(screen, (255, 255, 255), button_hatch_worker)
+    pygame.draw.rect(screen, (255, 255, 255), button_hatch_queen)
 
     for button, label in [
             (button_add_boids, "+"),
@@ -73,7 +82,7 @@ def render_UI(screen, boids):
             text_rect = text.get_rect(center=button.center)
             screen.blit(text, text_rect)
 
-    boid_count_text = font.render(f"Boids: {len(boids)}", True, (255, 255, 255))  # White text
+    boid_count_text = font.render(f"Ants: {len(boids)}", True, (255, 255, 255))  # White text
     max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
     max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
     neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
@@ -81,6 +90,12 @@ def render_UI(screen, boids):
     width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
     height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
     object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
+    queens_text = font.render(f"Queens: {QUEENS}", True, (255, 255, 255))
+    larva_text = font.render(f"Larva: {LARVA}", True, (255, 255, 255))
+    food_text = font.render(f"Food: {FOOD}", True, (255, 255, 255))
+    worker_text = font.render(f"Workers: {len(boids)}", True, (255, 255, 255))
+    hatch_worker_text = font.render(f"Hatch Worker for 10 food and 1 larva", True, (255, 255, 255))
+    hatch_queen_text = font.render(f"Hatch Queen for 500 food and 10 larva", True, (255, 255, 255))
 
     # Draw it on screen at top-left
     screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
@@ -91,6 +106,12 @@ def render_UI(screen, boids):
     screen.blit(object_separation_radius_text, (10, 110))
     screen.blit(width_text, (10, 130))
     screen.blit(height_text, (10, 150))
+    screen.blit(queens_text, (10, 170))
+    screen.blit(larva_text, (10, 190))
+    screen.blit(food_text, (10, 210))
+    screen.blit(worker_text, (10, 230))
+    screen.blit(hatch_worker_text, (10, 250))
+    screen.blit(hatch_queen_text, (10, 270))
 
     return [
         button_add_boids,
@@ -104,7 +125,9 @@ def render_UI(screen, boids):
         button_add_separation_radius,
         button_remove_separation_radius,
         button_add_object_separation_radius,
-        button_remove_object_separation_radius
+        button_remove_object_separation_radius,
+        button_hatch_worker,
+        button_hatch_queen,
     ]
 
 # Declare mouse_held as a global variable
@@ -112,7 +135,7 @@ mouse_held = False
 last_add_time = 0  # Initialize outside the function
 
 def manage_UI(buttons, boids, movable_objects):
-    global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, mouse_held, last_add_time
+    global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, mouse_held, last_add_time, FOOD, LARVA, WORKERS, QUEENS
     dragging_object = False  # Flag to check if an object is being dragged
 
     button_add_boids = buttons[0]
@@ -127,6 +150,8 @@ def manage_UI(buttons, boids, movable_objects):
     button_remove_separation_radius = buttons[9]
     button_add_object_separation_radius = buttons[10]
     button_remove_object_separation_radius = buttons[11]
+    button_hatch_worker = buttons[12]
+    button_hatch_queen = buttons[13]
     
     dragging = False
     for event in pygame.event.get():
@@ -190,6 +215,20 @@ def manage_UI(buttons, boids, movable_objects):
         elif button_remove_object_separation_radius.collidepoint(mouse_pos):
             if OBJECT_SEPERATION_RADIUS > 10:
                 OBJECT_SEPERATION_RADIUS -= 10
+        elif button_hatch_worker.collidepoint(mouse_pos):
+            if FOOD >= 10 and LARVA >= 1:
+                FOOD -= 10
+                LARVA -= 1
+                WORKERS += 1
+                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+                boids.append(new_boid)
+        elif button_hatch_queen.collidepoint(mouse_pos):
+            if FOOD >= 500 and LARVA >= 10:
+                FOOD -= 500
+                LARVA -= 10
+                QUEENS += 1
+                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+                boids.append(new_boid)
 
         # Update the last action time
         last_add_time = current_time
@@ -239,6 +278,8 @@ class MovableObject:
         pygame.draw.circle(screen, (255, 255, 0), self.position, self.size)
 
 class Boid:
+    ant_image = None
+    ant_image_path = os.path.join(os.path.dirname(__file__), "ant.png")
     def __init__(self, x, y):
         # Initialize position and velocity
         self.position = pygame.Vector2(x, y)
@@ -247,9 +288,16 @@ class Boid:
         self.acceleration = pygame.Vector2(0, 0)
         self.color = (255, 0, 0)
         self.signal_time = pygame.time.get_ticks()
-        self.goal_location = ()
+        self.goal_location = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
         self.has_received = False  # Flag to check if boid has received a message
-        #self.object_remains_in_goal_time = None  # Flag to check if an object remains in the goal
+        # Load ant image once for all boids
+        if Boid.ant_image is None:
+            try:
+                img = pygame.image.load(Boid.ant_image_path).convert_alpha()
+                Boid.ant_image = pygame.transform.smoothscale(img, (32, 32))
+            except Exception as e:
+                print(f"Error loading ant.png: {e}")
+                Boid.ant_image = None
 
     def update(self, blocks, WIDTH, HEIGHT):
         # Update velocity and position
@@ -443,18 +491,18 @@ class Boid:
         self.apply_force(separation * 1.5)
 
     def draw(self, screen):
-        # Draw a simple triangle for the boid
-        angle = math.atan2(self.velocity.y, self.velocity.x)
-        points = [
-            self.position + pygame.Vector2(math.cos(angle) * TRIANGLE_SIZE, math.sin(angle) * TRIANGLE_SIZE),
-            self.position + pygame.Vector2(math.cos(angle + 2.5) * TRIANGLE_SIZE, math.sin(angle + 2.5) * TRIANGLE_SIZE),
-            self.position + pygame.Vector2(math.cos(angle - 2.5) * TRIANGLE_SIZE, math.sin(angle - 2.5) * TRIANGLE_SIZE),
-        ]
-
-        pygame.draw.polygon(screen, self.color, points)
+        # Draw the ant sprite, rotated to match velocity direction
+        if Boid.ant_image:
+            angle = math.degrees(math.atan2(-self.velocity.y, self.velocity.x)) - 90
+            rotated = pygame.transform.rotate(Boid.ant_image, angle)
+            rect = rotated.get_rect(center=(self.position.x, self.position.y))
+            screen.blit(rotated, rect)
+        else:
+            # fallback: draw a red circle
+            pygame.draw.circle(screen, (255,0,0), (int(self.position.x), int(self.position.y)), 8)
 
 def main():
-    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, WIDTH, HEIGHT, OBJECT_SEPERATION_RADIUS, OBJECTS_IN_GOAL
+    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, WIDTH, HEIGHT, OBJECT_SEPERATION_RADIUS, OBJECTS_IN_GOAL, LARVA, QUEENS, FOOD
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Swarm Simulation")
@@ -472,13 +520,19 @@ def main():
     blocks = []
 
     # Target position
-    target_position = pygame.Vector2(WIDTH - 100, HEIGHT - 100)
+    target_position = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
     target_radius = 40
+
+    one_second_ticker = pygame.time.get_ticks()
 
     running = True
     while running:
-        screen.fill((0, 0, 0))  # Black background
-        pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius, 3)  # Draw target circle
+        screen.fill((0, 100, 0))  # RGB for dark green
+        
+        # Draw a black filled circle in the middle of the screen as the base
+        base_center = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
+        base_radius = 40
+        pygame.draw.circle(screen, (0, 0, 0), base_center, base_radius)  # filled black # Draw base
         
         buttons = render_UI(screen, boids)
         running = manage_UI(buttons, boids, objects)
@@ -498,17 +552,12 @@ def main():
             obj.update(target_position)
             obj.draw(screen)
         
-        # Check if all objects are in the target
-        all_in_target = all(obj.position.distance_to(target_position) < target_radius for obj in objects)
-        
-        if all_in_target:
-            if target_start_time is None:
-                target_start_time = pygame.time.get_ticks()  # Start the timer
-            elif pygame.time.get_ticks() - target_start_time >= TARGET_HOLD_TIME:
-                OBJECTS_IN_GOAL = True  # Set the goal flag after 3 seconds
-                pygame.draw.circle(screen, (0, 255, 0), target_position, target_radius)  # Filled goal
-        else:
-            target_start_time = None  # Reset the timer if any object leaves the target
+        now = pygame.time.get_ticks()
+        if now - one_second_ticker >= 1000:
+            LARVA += QUEENS*2 # Each queen produces 2 larva per second
+            FOOD += WORKERS # Each worker brings in 1 food per second
+            one_second_ticker = now
+    
 
         pygame.display.flip()
         clock.tick(30)
