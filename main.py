@@ -1,15 +1,4 @@
-# main.py — Integration Step 2: add pushable objects + goal (no fonts, pygbag-ready)
-# Controls:
-#   Click: set/clear target pointer
-#   Space: pause/resume
-#   F: toggle FOV rings
-#   +/-: add/remove boids
-#   O: add an object
-#   R: reset
-#
-# Notes:
-# - No NumPy, no blocking calls, yields every frame
-# - Uses ticks-based dt (stable in browser)
+# main.py — Clean visuals: tidy HUD text, rings off by default, pygbag-safe
 
 try:
     import asyncio
@@ -25,7 +14,7 @@ FPS = 60
 
 # Boids
 NUM_BOIDS = 50
-MAX_SPEED = 4.5          # a bit faster for visibility
+MAX_SPEED = 4.2
 MAX_FORCE = 0.10
 NEIGHBOR_RADIUS = 90
 SEPARATION_RADIUS = 26
@@ -38,8 +27,7 @@ OBJECT_PUSH_FORCE = 0.26
 OBJECT_SEPARATION_RADIUS = 60
 OBJECT_FRICTION = 0.965
 OBJECT_MAX_SPEED = 2.4
-
-ATTRACTION_RADIUS = 140   # boids "notice" objects within this distance
+ATTRACTION_RADIUS = 140
 
 # Goal
 GOAL_POS = (int(WIDTH * 0.82), int(HEIGHT * 0.25))
@@ -48,23 +36,25 @@ TARGET_HOLD_TIME_MS = 3000
 objects_all_in_goal_since = None
 OBJECTS_IN_GOAL = False
 
-# Toggles/state
+# Toggles/state (rings OFF by default)
 PAUSED = False
 DRAW_FOV = False
-DRAW_BROADCAST = True
+DRAW_BROADCAST = False
+SHOW_HELP = True  # press ? to toggle
+
 BROADCAST_RADIUS = 110
 
-# Colors (high contrast for browser)
-BG_COLOR = (70, 75, 85)         # mid-gray bg
-BOID_COLOR = (245, 245, 255)    # bright triangles
-FOV_COLOR = (140, 160, 180)
+# Colors
+BG_COLOR = (68, 72, 80)          # clean mid-gray
+BOID_COLOR = (248, 248, 255)     # bright triangles
+FOV_COLOR = (135, 150, 170)      # muted ring color
 TARGET_COLOR = (255, 200, 90)
-OBJECT_COLOR = (80, 170, 255)
+OBJECT_COLOR = (70, 165, 255)
 OBJECT_IN_GOAL_COLOR = (90, 230, 150)
 GOAL_COLOR = (160, 230, 200)
 GOAL_RING = (60, 140, 110)
-HUD_BG = (245, 248, 255)
-HUD_FG = (30, 35, 45)
+HUD_BG = (240, 245, 255)
+HUD_TEXT = (28, 32, 40)
 
 # ---------- Helpers ----------
 def clamp_mag(vec: pygame.math.Vector2, max_mag: float) -> pygame.math.Vector2:
@@ -91,8 +81,6 @@ class Boid:
         self.vel += accel
         clamp_mag(self.vel, MAX_SPEED)
         self.pos += self.vel * dt
-
-        # wrap
         if self.pos.x < 0: self.pos.x += WIDTH
         elif self.pos.x >= WIDTH: self.pos.x -= WIDTH
         if self.pos.y < 0: self.pos.y += HEIGHT
@@ -117,8 +105,6 @@ class PushObject:
         self.pos += self.vel * dt
         clamp_mag(self.vel, OBJECT_MAX_SPEED)
         self.vel *= OBJECT_FRICTION
-
-        # soft bounce at bounds
         bounced = False
         if self.pos.x < OBJECT_RADIUS:
             self.pos.x = OBJECT_RADIUS; self.vel.x *= -0.4; bounced = True
@@ -142,11 +128,13 @@ class PushObject:
 class Swarm:
     def __init__(self, n_boids: int, n_objects: int):
         self.boids = [Boid(random.uniform(0, WIDTH), random.uniform(0, HEIGHT)) for _ in range(n_boids)]
-        self.objects = []
-        for _ in range(n_objects):
-            x = random.uniform(WIDTH * 0.12, WIDTH * 0.45)
-            y = random.uniform(HEIGHT * 0.55, HEIGHT * 0.88)
-            self.objects.append(PushObject(x, y))
+        self.objects = [
+            PushObject(
+                random.uniform(WIDTH * 0.12, WIDTH * 0.45),
+                random.uniform(HEIGHT * 0.55, HEIGHT * 0.88),
+            )
+            for _ in range(n_objects)
+        ]
         self.target = None
 
     def set_target(self, pos_or_none):
@@ -161,7 +149,6 @@ class Swarm:
     def step(self, dt, now_ms):
         global objects_all_in_goal_since, OBJECTS_IN_GOAL
 
-        # Boids
         for i, b in enumerate(self.boids):
             align = pygame.math.Vector2(0, 0)
             coh   = pygame.math.Vector2(0, 0)
@@ -181,18 +168,17 @@ class Swarm:
 
             a = pygame.math.Vector2(0, 0)
             if total > 0:
-                # alignment
                 align /= total
                 if align.length_squared() > 1e-12:
                     align = align.normalize() * MAX_SPEED
                 a += steer_towards(b.vel, align, MAX_FORCE)
-                # cohesion
+
                 coh  /= total
                 to_c = (coh - b.pos)
                 if to_c.length_squared() > 1e-12:
                     to_c = to_c.normalize() * MAX_SPEED
                 a += steer_towards(b.vel, to_c, MAX_FORCE * 0.85)
-                # separation
+
                 if sep.length_squared() > 1e-12:
                     sep = sep.normalize() * MAX_SPEED
                 a += steer_towards(b.vel, sep, MAX_FORCE * 1.2)
@@ -202,21 +188,17 @@ class Swarm:
                 to_o = o.pos - b.pos
                 d = to_o.length()
 
-                # gentle attraction to approach objects
                 if d < ATTRACTION_RADIUS and d > 1e-6:
                     desired = to_o.normalize() * MAX_SPEED * 0.8
                     a += steer_towards(b.vel, desired, MAX_FORCE * 0.9)
 
-                # keep some distance from object
                 if d < OBJECT_SEPARATION_RADIUS and d > 1e-6:
                     away = (-to_o).normalize() * MAX_SPEED
                     a += steer_towards(b.vel, away, MAX_FORCE * 1.1)
 
-                # push if very close
                 if d < OBJECT_RADIUS + 12 and b.vel.length_squared() > 1e-6:
                     o.vel += b.vel.normalize() * OBJECT_PUSH_FORCE
 
-            # optional mouse target (pointer)
             if self.target is not None:
                 to_t = pygame.math.Vector2(self.target) - b.pos
                 if to_t.length_squared() > 1e-12:
@@ -225,11 +207,9 @@ class Swarm:
 
             b.update(a, dt)
 
-        # Objects move
         for o in self.objects:
             o.step(dt)
 
-        # Goal hold timer
         if self._all_objects_in_goal():
             if objects_all_in_goal_since is None:
                 objects_all_in_goal_since = now_ms
@@ -239,7 +219,7 @@ class Swarm:
             objects_all_in_goal_since = None
             OBJECTS_IN_GOAL = False
 
-    def draw(self, surf, draw_fov=False, draw_broadcast=True):
+    def draw(self, surf, draw_fov=False, draw_broadcast=False):
         # goal
         pygame.draw.circle(surf, GOAL_COLOR, GOAL_POS, GOAL_RADIUS)
         pygame.draw.circle(surf, GOAL_RING, GOAL_POS, GOAL_RADIUS, 3)
@@ -258,23 +238,58 @@ class Swarm:
             if draw_broadcast:
                 pygame.draw.circle(surf, (120,130,150), (int(b.pos.x), int(b.pos.y)), BROADCAST_RADIUS, 1)
 
-# ---------- HUD (no fonts) ----------
+# ---------- HUD (text, safe fallback) ----------
 def draw_hud(screen, dt_ms, fps, swarm):
-    # Simple bars to visualize state (no text):
-    pygame.draw.rect(screen, HUD_BG, (0, 0, WIDTH, 28))
-    # dt bar
-    pygame.draw.rect(screen, HUD_FG, (8, 6, 200, 16), 2)
-    fill = max(0, min(1, dt_ms/33.0))
-    pygame.draw.rect(screen, HUD_FG, (8, 6, int(200*fill), 16))
-    # fps bar
-    pygame.draw.rect(screen, HUD_FG, (220, 6, 200, 16), 2)
-    ffill = max(0, min(1, (fps if fps>0 else 60)/60.0))
-    pygame.draw.rect(screen, HUD_FG, (220, 6, int(200*ffill), 16))
-    # boid count “length box”
-    pygame.draw.rect(screen, HUD_FG, (432, 6, 16 + min(200, len(swarm.boids)), 16), 1)
-    # success indicator (goal)
-    if OBJECTS_IN_GOAL:
-        pygame.draw.rect(screen, (60, 200, 120), (WIDTH-40, 6, 32, 16))
+    # Try to use a basic font; if it fails (rare), skip text
+    try:
+        font = pygame.font.Font(None, 20)
+    except Exception:
+        pygame.draw.rect(screen, HUD_BG, (0, 0, WIDTH, 26))
+        return
+
+    pygame.draw.rect(screen, HUD_BG, (0, 0, WIDTH, 26))
+    info = [
+        f"FPS {fps:.0f}",
+        f"dt {dt_ms}ms",
+        f"Boids {len(swarm.boids)}",
+        f"Objs {len(swarm.objects)}",
+        f"Goal {'OK' if OBJECTS_IN_GOAL else '--'}",
+        "[Space] pause  [F] FOV  [B] rings  [+/-] boids  [O] obj  [R] reset  [?] help",
+    ]
+    x = 8
+    for i, s in enumerate(info):
+        surf = font.render(s, True, HUD_TEXT)
+        screen.blit(surf, (x, 6))
+        x += surf.get_width() + 12
+
+def draw_help_overlay(screen):
+    # Simple help box bottom-left
+    try:
+        font = pygame.font.Font(None, 22)
+    except Exception:
+        return
+    pad = 10
+    lines = [
+        "Controls:",
+        "Click: set/clear target pointer",
+        "Space: pause/resume",
+        "F: toggle FOV rings",
+        "B: toggle broadcast rings",
+        "+ / -: add/remove boids",
+        "O: add object  |  R: reset",
+        "?: toggle this help",
+    ]
+    # measure
+    w = max(font.size(l)[0] for l in lines) + pad*2
+    h = (len(lines) * (font.get_height()+2)) + pad*2
+    rect = pygame.Rect(8, HEIGHT - h - 8, w, h)
+    pygame.draw.rect(screen, (250, 250, 255), rect)
+    pygame.draw.rect(screen, (40, 45, 55), rect, 2)
+    y = rect.top + pad
+    for l in lines:
+        surf = font.render(l, True, (30, 34, 44))
+        screen.blit(surf, (rect.left + pad, y))
+        y += font.get_height() + 2
 
 # ---------- Main (async) ----------
 async def main():
@@ -283,15 +298,13 @@ async def main():
     except Exception: pass
 
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Swarms — Objects & Goal (pygbag)")
+    pygame.display.set_caption("Swarms — Clean Visuals (pygbag)")
     clock = pygame.time.Clock()
 
     swarm = Swarm(NUM_BOIDS, NUM_OBJECTS)
-    global PAUSED, DRAW_FOV, DRAW_BROADCAST
+    global PAUSED, DRAW_FOV, DRAW_BROADCAST, SHOW_HELP
 
-    # robust dt via ticks
     last_ticks = pygame.time.get_ticks()
-
     running = True
     while running:
         for e in pygame.event.get():
@@ -318,6 +331,9 @@ async def main():
                     swarm = Swarm(NUM_BOIDS, NUM_OBJECTS)
                     globals()['objects_all_in_goal_since'] = None
                     globals()['OBJECTS_IN_GOAL'] = False
+                elif e.key == pygame.K_SLASH:  # '?' on most keyboards (Shift+/)
+                    SHOW_HELP = not SHOW_HELP
+
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 pos = pygame.mouse.get_pos()
                 if swarm.target is None:
@@ -341,9 +357,12 @@ async def main():
         if not PAUSED:
             swarm.step(dt, now)
 
+        # draw
         screen.fill(BG_COLOR)
         swarm.draw(screen, draw_fov=DRAW_FOV, draw_broadcast=DRAW_BROADCAST)
         draw_hud(screen, dt_ms, clock.get_fps(), swarm)
+        if SHOW_HELP:
+            draw_help_overlay(screen)
         pygame.display.flip()
 
         clock.tick(FPS)
