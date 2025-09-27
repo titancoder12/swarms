@@ -1,11 +1,13 @@
-# main.py — Clean visuals: tidy HUD text, rings off by default, pygbag-safe
+# main.py — Clean visuals + ANT SPRITE (pygbag-safe)
+# Place your sprite at: assets/ant.png  (or ./ant.png)
+# Controls: Click set/clear target | Space pause | F FOV | B rings | +/- boids | O add obj | R reset | ? help
 
 try:
     import asyncio
 except Exception:
     import pygbag.aio as asyncio
 
-import random, math
+import random, math, os
 import pygame
 
 # ---------- Config ----------
@@ -36,25 +38,27 @@ TARGET_HOLD_TIME_MS = 3000
 objects_all_in_goal_since = None
 OBJECTS_IN_GOAL = False
 
-# Toggles/state (rings OFF by default)
+# Toggles/state
 PAUSED = False
 DRAW_FOV = False
 DRAW_BROADCAST = False
-SHOW_HELP = True  # press ? to toggle
-
+SHOW_HELP = True
 BROADCAST_RADIUS = 110
 
 # Colors
-BG_COLOR = (68, 72, 80)          # clean mid-gray
-BOID_COLOR = (248, 248, 255)     # bright triangles
-FOV_COLOR = (135, 150, 170)      # muted ring color
-TARGET_COLOR = (255, 200, 90)
+BG_COLOR = (68, 72, 80)
+TRI_COLOR = (248, 248, 255)      # fallback triangle color
+FOV_COLOR = (135, 150, 170)
 OBJECT_COLOR = (70, 165, 255)
 OBJECT_IN_GOAL_COLOR = (90, 230, 150)
 GOAL_COLOR = (160, 230, 200)
 GOAL_RING = (60, 140, 110)
 HUD_BG = (240, 245, 255)
 HUD_TEXT = (28, 32, 40)
+
+# Sprite tuning
+ANT_SCALE = 0.05        # scale factor relative to source image
+ANGLE_STEP = 5          # degrees between cached rotations
 
 # ---------- Helpers ----------
 def clamp_mag(vec: pygame.math.Vector2, max_mag: float) -> pygame.math.Vector2:
@@ -67,6 +71,50 @@ def steer_towards(current_vel: pygame.math.Vector2,
                   desired: pygame.math.Vector2,
                   max_force: float) -> pygame.math.Vector2:
     return clamp_mag(desired - current_vel, max_force)
+
+def load_ant_sprite():
+    """
+    Try loading 'assets/ant.png' then './ant.png'.
+    Returns (surface, is_loaded_bool).
+    """
+    paths = ["assets/ant.png", "ant.png"]
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                img = pygame.image.load(p).convert_alpha()
+                return img, True
+            except Exception:
+                pass
+    return None, False
+
+class SpriteBank:
+    """
+    Caches rotated/scaled versions of the ant sprite at ANGLE_STEP increments.
+    Heading 0deg = pointing EAST; we rotate so heading aligns with velocity.
+    """
+    def __init__(self, base_surface, scale=1.0, angle_step=5):
+        self.ok = base_surface is not None
+        self.angle_step = angle_step
+        self.cache = {}
+        if self.ok:
+            w, h = base_surface.get_size()
+            scaled = pygame.transform.smoothscale(base_surface, (int(w*scale), int(h*scale)))
+            self.base = scaled
+        else:
+            self.base = None
+
+    def get(self, angle_degrees):
+        """
+        angle_degrees: 0 points EAST; pygame's rotation is ccw, so use -angle for screen.
+        We quantize to nearest ANGLE_STEP for caching.
+        """
+        if not self.ok:
+            return None
+        q = int(round(angle_degrees / self.angle_step) * self.angle_step) % 360
+        if q not in self.cache:
+            # pygame.transform.rotate rotates ccw; we want sprite to face angle
+            self.cache[q] = pygame.transform.rotate(self.base, -q)
+        return self.cache[q]
 
 # ---------- Entities ----------
 class Boid:
@@ -86,14 +134,23 @@ class Boid:
         if self.pos.y < 0: self.pos.y += HEIGHT
         elif self.pos.y >= HEIGHT: self.pos.y -= HEIGHT
 
-    def draw(self, surf):
+    def draw(self, surf, sprite_bank: SpriteBank | None):
+        if sprite_bank and sprite_bank.ok and self.vel.length_squared() > 1e-6:
+            # angle in degrees where 0 = east, atan2 gives angle from x-axis (radians)
+            angle = math.degrees(math.atan2(self.vel.y, self.vel.x))
+            img = sprite_bank.get(angle)
+            if img:
+                rect = img.get_rect(center=(int(self.pos.x), int(self.pos.y)))
+                surf.blit(img, rect)
+                return
+        # Fallback: draw as a small triangle
         fwd = self.vel.normalize() if self.vel.length_squared() > 1e-6 else pygame.math.Vector2(1,0)
         left = pygame.math.Vector2(-fwd.y, fwd.x)
         size = 9
         tip = self.pos + fwd * size
         bl  = self.pos - fwd * (size - 3) + left * (size/2.4)
         br  = self.pos - fwd * (size - 3) - left * (size/2.4)
-        pygame.draw.polygon(surf, BOID_COLOR, (tip, bl, br))
+        pygame.draw.polygon(surf, TRI_COLOR, (tip, bl, br))
 
 class PushObject:
     __slots__ = ("pos", "vel")
@@ -219,7 +276,7 @@ class Swarm:
             objects_all_in_goal_since = None
             OBJECTS_IN_GOAL = False
 
-    def draw(self, surf, draw_fov=False, draw_broadcast=False):
+    def draw(self, surf, sprite_bank: SpriteBank | None, draw_fov=False, draw_broadcast=False):
         # goal
         pygame.draw.circle(surf, GOAL_COLOR, GOAL_POS, GOAL_RADIUS)
         pygame.draw.circle(surf, GOAL_RING, GOAL_POS, GOAL_RADIUS, 3)
@@ -231,7 +288,7 @@ class Swarm:
 
         # boids
         for b in self.boids:
-            b.draw(surf)
+            b.draw(surf, sprite_bank)
             if draw_fov:
                 pygame.draw.circle(surf, FOV_COLOR, (int(b.pos.x), int(b.pos.y)), NEIGHBOR_RADIUS, 1)
                 pygame.draw.circle(surf, FOV_COLOR, (int(b.pos.x), int(b.pos.y)), SEPARATION_RADIUS, 1)
@@ -240,7 +297,6 @@ class Swarm:
 
 # ---------- HUD (text, safe fallback) ----------
 def draw_hud(screen, dt_ms, fps, swarm):
-    # Try to use a basic font; if it fails (rare), skip text
     try:
         font = pygame.font.Font(None, 20)
     except Exception:
@@ -257,13 +313,12 @@ def draw_hud(screen, dt_ms, fps, swarm):
         "[Space] pause  [F] FOV  [B] rings  [+/-] boids  [O] obj  [R] reset  [?] help",
     ]
     x = 8
-    for i, s in enumerate(info):
+    for s in info:
         surf = font.render(s, True, HUD_TEXT)
         screen.blit(surf, (x, 6))
         x += surf.get_width() + 12
 
 def draw_help_overlay(screen):
-    # Simple help box bottom-left
     try:
         font = pygame.font.Font(None, 22)
     except Exception:
@@ -279,7 +334,6 @@ def draw_help_overlay(screen):
         "O: add object  |  R: reset",
         "?: toggle this help",
     ]
-    # measure
     w = max(font.size(l)[0] for l in lines) + pad*2
     h = (len(lines) * (font.get_height()+2)) + pad*2
     rect = pygame.Rect(8, HEIGHT - h - 8, w, h)
@@ -298,8 +352,12 @@ async def main():
     except Exception: pass
 
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Swarms — Clean Visuals (pygbag)")
+    pygame.display.set_caption("Swarms — Ant Sprite (pygbag)")
     clock = pygame.time.Clock()
+
+    # Load ant sprite (safe fallback if missing)
+    base_ant, ok = load_ant_sprite()
+    sprite_bank = SpriteBank(base_ant, scale=ANT_SCALE, angle_step=ANGLE_STEP) if ok else None
 
     swarm = Swarm(NUM_BOIDS, NUM_OBJECTS)
     global PAUSED, DRAW_FOV, DRAW_BROADCAST, SHOW_HELP
@@ -331,7 +389,7 @@ async def main():
                     swarm = Swarm(NUM_BOIDS, NUM_OBJECTS)
                     globals()['objects_all_in_goal_since'] = None
                     globals()['OBJECTS_IN_GOAL'] = False
-                elif e.key == pygame.K_SLASH:  # '?' on most keyboards (Shift+/)
+                elif e.key == pygame.K_SLASH:  # '?' (Shift+/)
                     SHOW_HELP = not SHOW_HELP
 
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
@@ -357,9 +415,8 @@ async def main():
         if not PAUSED:
             swarm.step(dt, now)
 
-        # draw
         screen.fill(BG_COLOR)
-        swarm.draw(screen, draw_fov=DRAW_FOV, draw_broadcast=DRAW_BROADCAST)
+        swarm.draw(screen, sprite_bank, draw_fov=DRAW_FOV, draw_broadcast=DRAW_BROADCAST)
         draw_hud(screen, dt_ms, clock.get_fps(), swarm)
         if SHOW_HELP:
             draw_help_overlay(screen)
