@@ -1,4 +1,4 @@
-# main.py — Clean visuals + ANT SPRITE (pygbag-safe)
+# main.py — Clean visuals + ANT SPRITE (auto-scale) — pygbag-ready
 # Place your sprite at: assets/ant.png  (or ./ant.png)
 # Controls: Click set/clear target | Space pause | F FOV | B rings | +/- boids | O add obj | R reset | ? help
 
@@ -57,8 +57,8 @@ HUD_BG = (240, 245, 255)
 HUD_TEXT = (28, 32, 40)
 
 # Sprite tuning
-ANT_SCALE = 0.05        # scale factor relative to source image
-ANGLE_STEP = 5          # degrees between cached rotations
+ANT_TARGET_HEIGHT = 14   # pixels tall; tweak to resize ants consistently
+ANGLE_STEP = 5           # degrees between cached rotations
 
 # ---------- Helpers ----------
 def clamp_mag(vec: pygame.math.Vector2, max_mag: float) -> pygame.math.Vector2:
@@ -73,48 +73,46 @@ def steer_towards(current_vel: pygame.math.Vector2,
     return clamp_mag(desired - current_vel, max_force)
 
 def load_ant_sprite():
-    """
-    Try loading 'assets/ant.png' then './ant.png'.
-    Returns (surface, is_loaded_bool).
-    """
-    paths = ["assets/ant.png", "ant.png"]
-    for p in paths:
+    """Try loading 'assets/ant.png' then './ant.png'. Returns (surface, ok_bool)."""
+    for p in ("assets/ant.png", "ant.png"):
         if os.path.exists(p):
             try:
-                img = pygame.image.load(p).convert_alpha()
-                return img, True
+                return pygame.image.load(p).convert_alpha(), True
             except Exception:
                 pass
     return None, False
 
 class SpriteBank:
     """
-    Caches rotated/scaled versions of the ant sprite at ANGLE_STEP increments.
-    Heading 0deg = pointing EAST; we rotate so heading aligns with velocity.
+    Caches rotated versions of the ant sprite at ANGLE_STEP increments.
+    Auto-scales the base sprite to ANT_TARGET_HEIGHT pixels tall.
     """
-    def __init__(self, base_surface, scale=1.0, angle_step=5):
+    def __init__(self, base_surface, target_height=ANT_TARGET_HEIGHT, angle_step=ANGLE_STEP):
         self.ok = base_surface is not None
         self.angle_step = angle_step
         self.cache = {}
         if self.ok:
             w, h = base_surface.get_size()
-            scaled = pygame.transform.smoothscale(base_surface, (int(w*scale), int(h*scale)))
-            self.base = scaled
+            if h <= 0:
+                self.ok = False
+                self.base = None
+            else:
+                new_h = max(6, int(target_height))
+                new_w = max(6, int(w * (new_h / h)))
+                self.base = pygame.transform.smoothscale(base_surface, (new_w, new_h))
         else:
             self.base = None
 
     def get(self, angle_degrees):
-        """
-        angle_degrees: 0 points EAST; pygame's rotation is ccw, so use -angle for screen.
-        We quantize to nearest ANGLE_STEP for caching.
-        """
+        """0° faces EAST. Quantize to ANGLE_STEP for caching. Rotate ccw by -angle for screen."""
         if not self.ok:
             return None
         q = int(round(angle_degrees / self.angle_step) * self.angle_step) % 360
-        if q not in self.cache:
-            # pygame.transform.rotate rotates ccw; we want sprite to face angle
+        surf = self.cache.get(q)
+        if surf is None:
             self.cache[q] = pygame.transform.rotate(self.base, -q)
-        return self.cache[q]
+            surf = self.cache[q]
+        return surf
 
 # ---------- Entities ----------
 class Boid:
@@ -136,14 +134,13 @@ class Boid:
 
     def draw(self, surf, sprite_bank: SpriteBank | None):
         if sprite_bank and sprite_bank.ok and self.vel.length_squared() > 1e-6:
-            # angle in degrees where 0 = east, atan2 gives angle from x-axis (radians)
             angle = math.degrees(math.atan2(self.vel.y, self.vel.x))
             img = sprite_bank.get(angle)
             if img:
                 rect = img.get_rect(center=(int(self.pos.x), int(self.pos.y)))
                 surf.blit(img, rect)
                 return
-        # Fallback: draw as a small triangle
+        # Fallback: simple triangle
         fwd = self.vel.normalize() if self.vel.length_squared() > 1e-6 else pygame.math.Vector2(1,0)
         left = pygame.math.Vector2(-fwd.y, fwd.x)
         size = 9
@@ -302,7 +299,6 @@ def draw_hud(screen, dt_ms, fps, swarm):
     except Exception:
         pygame.draw.rect(screen, HUD_BG, (0, 0, WIDTH, 26))
         return
-
     pygame.draw.rect(screen, HUD_BG, (0, 0, WIDTH, 26))
     info = [
         f"FPS {fps:.0f}",
@@ -352,12 +348,12 @@ async def main():
     except Exception: pass
 
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Swarms — Ant Sprite (pygbag)")
+    pygame.display.set_caption("Swarms — Ant Sprite (auto-scale)")
     clock = pygame.time.Clock()
 
     # Load ant sprite (safe fallback if missing)
     base_ant, ok = load_ant_sprite()
-    sprite_bank = SpriteBank(base_ant, scale=ANT_SCALE, angle_step=ANGLE_STEP) if ok else None
+    sprite_bank = SpriteBank(base_ant, target_height=ANT_TARGET_HEIGHT, angle_step=ANGLE_STEP) if ok else None
 
     swarm = Swarm(NUM_BOIDS, NUM_OBJECTS)
     global PAUSED, DRAW_FOV, DRAW_BROADCAST, SHOW_HELP
