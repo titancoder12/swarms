@@ -1,12 +1,11 @@
+# --- PYGBAG: make audio a no-op so the browser doesn't block startup ---
 import os
 os.environ["SDL_AUDIODRIVER"] = "dummy"      # don't try to open real audio in the browser
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
 import pygame
-import os
 import random
 import math
-import asyncio  # <-- added for pygbag async loop
 
 # Screen dimensions
 WIDTH, HEIGHT = 1000, 1000
@@ -31,7 +30,8 @@ FOOD = 0
 
 def render_UI(screen, boids):
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
-    font = pygame.font.SysFont(None, 15)
+    # PYGBAG: use built-in default font (works in browser); SysFont can be flaky
+    font = pygame.font.Font(None, 15)
 
     a = 140
     b = 10
@@ -161,8 +161,9 @@ def manage_UI(buttons, boids, movable_objects):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False
-        if event.type == pygame.VIDEORESIZE:
-            WIDTH, HEIGHT = event.w, event.h
+        # PYGBAG: avoid resizing the canvas here; keep the browser-managed size
+        # if event.type == pygame.VIDEORESIZE:
+        #     WIDTH, HEIGHT = event.w, event.h
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_held = True
             for obj in movable_objects:
@@ -265,23 +266,21 @@ class MovableObject:
                 self.velocity.y *= -1
                 # Clamp inside bounds
                 self.position.y = max(0, min(self.position.y, HEIGHT))
-        # NOTE: avoid exact vector equality in float math; treat "in goal" as within a radius
-        if self.position.distance_to(target_position) <= 30:  # ~goal radius check instead of equality
+        if self.position == target_position:
             if self.last_goal_time is None:
                 self.last_goal_time = pygame.time.get_ticks()
             if pygame.time.get_ticks() - self.last_goal_time > TARGET_HOLD_TIME:
                 self.held_in_goal = True
-            # self.last_goal_time = pygame.time.get_ticks()  # (not needed each frame once set)
+            self.last_goal_time = pygame.time.get_ticks()
         else:
             self.held_in_goal = False
-            self.last_goal_time = None
 
     def apply_force(self, force):
         if not self.is_dragging:
             self.velocity += force / self.mass
 
     def draw(self, screen):
-        pygame.draw.circle(screen, (255, 255, 0), (int(self.position.x), int(self.position.y)), self.size)
+        pygame.draw.circle(screen, (255, 255, 0), self.position, self.size)
 
 class Boid:
     ant_image = None
@@ -350,11 +349,9 @@ class Boid:
                 total += 1
         if total > 0:
             steering /= total
-            # guard normalize on zero-length
-            if steering.length() > 0:
-                steering = (steering.normalize() * MAX_SPEED) - self.velocity
-                if steering.length() > MAX_FORCE:
-                    steering.scale_to_length(MAX_FORCE)
+            steering = (steering.normalize() * MAX_SPEED) - self.velocity
+            if steering.length() > MAX_FORCE:
+                steering.scale_to_length(MAX_FORCE)
         return steering
 
     def cohesion(self, boids):
@@ -366,11 +363,8 @@ class Boid:
                 total += 1
         if total > 0:
             steering /= total
-            # guard normalize on zero-length
-            desired = steering - self.position
-            if desired.length() > 0:
-                desired = desired.normalize() * MAX_SPEED
-                steering = desired - self.velocity
+            if (steering - self.position).length() > 0:
+                steering = (steering - self.position).normalize() * MAX_SPEED - self.velocity
                 if steering.length() > MAX_FORCE:
                     steering.scale_to_length(MAX_FORCE)
                 return steering
@@ -442,15 +436,13 @@ class Boid:
                 obj.apply_force(force)
     
     def move_to_location(self, location):
-        # guard normalize on zero-length
         direction = (location - self.position)
         if direction.length() > 0:
             direction = direction.normalize()
-            steer = direction * MAX_SPEED - self.velocity
-            if steer.length() > MAX_FORCE:
-                steer.scale_to_length(MAX_FORCE)
-            return steer
-        return pygame.Vector2(0, 0)
+        steer = direction * MAX_SPEED - self.velocity
+        if steer.length() > MAX_FORCE:
+            steer.scale_to_length(MAX_FORCE)
+        return steer
 
     def attract_to_object(self, boids, blocks, objects, target_position):
         closest_object = None
@@ -517,21 +509,25 @@ class Boid:
             # fallback: draw a red circle
             pygame.draw.circle(screen, (255,0,0), (int(self.position.x), int(self.position.y)), 8)
 
-# ---- async pygbag entrypoint ----
+# --- make the main loop async for pygbag ---
+import asyncio
+
 async def main():
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, WIDTH, HEIGHT, OBJECT_SEPERATION_RADIUS, OBJECTS_IN_GOAL, LARVA, QUEENS, FOOD
+
     pygame.init()
-    try:
-        import pygame
-        pygame.mixer.quit()
-    except Exception:
-        pass
-    # Use SCALED for browser-friendly scaling; RESIZABLE kept off for stability in wasm
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)  # No RESIZABLE
+    # PYGBAG: use SCALED so the canvas matches CSS size and looks crisp
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
     pygame.display.set_caption("Swarm Simulation")
     clock = pygame.time.Clock()
     last_add_time = pygame.time.get_ticks()
     init_goal_time = pygame.time.get_ticks()
+
+    # Keep mixer off in web
+    try:
+        pygame.mixer.quit()
+    except Exception:
+        pass
 
     # Create boids
     boids = [Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(NUM_BOIDS)]
@@ -555,7 +551,7 @@ async def main():
         # Draw a black filled circle in the middle of the screen as the base
         base_center = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
         base_radius = 40
-        pygame.draw.circle(screen, (0, 0, 0), (int(base_center.x), int(base_center.y)), base_radius)  # filled black # Draw base
+        pygame.draw.circle(screen, (0, 0, 0), base_center, base_radius)  # filled black # Draw base
         
         buttons = render_UI(screen, boids)
         running = manage_UI(buttons, boids, objects)
@@ -584,18 +580,19 @@ async def main():
         pygame.display.flip()
         clock.tick(30)
 
-        # CRUCIAL for pygbag/browser: yield each frame
+        # PYGBAG: yield to the browser so events/render can happen
         await asyncio.sleep(0)
 
     pygame.quit()
 
+# --- show exceptions in the browser console so we don't see a silent black screen ---
 async def _run():
     try:
         await main()
     except Exception:
         import traceback
-        traceback.print_exc()  # will show a red Python traceback in the browser console
+        traceback.print_exc()
         raise
 
 if __name__ == "__main__":
-    asyncio.run(_run()) #asyncio.run(main())
+    asyncio.run(_run())
