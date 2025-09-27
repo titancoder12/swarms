@@ -1,598 +1,204 @@
-# --- PYGBAG: make audio a no-op so the browser doesn't block startup ---
-import os
-os.environ["SDL_AUDIODRIVER"] = "dummy"      # don't try to open real audio in the browser
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+# main.py
+# Pygbag-friendly Pygame app with a simple boids swarm.
+# - Async main loop (await asyncio.sleep(0)) so the browser doesn't freeze
+# - No blocking time.sleep or threads
+# - Uses pygame.math.Vector2 (no NumPy required)
+# - Audio disabled by default to avoid autoplay issues on the web
 
+try:
+    import asyncio
+except Exception:
+    import pygbag.aio as asyncio
+
+import random, math
 import pygame
-import random
-import math
 
-# Screen dimensions
 WIDTH, HEIGHT = 1000, 1000
-# Boid settings
-NUM_BOIDS = 10
-MAX_SPEED = 5
-MAX_FORCE = 1
-OBJECT_PUSH_FORCE = 0.2
-NEIGHBOR_RADIUS = 200
-SEPARATION_RADIUS = 30
-OBJECT_SEPERATION_RADIUS = 50
-TRIANGLE_SIZE = 5
-ATTRACTION_RADIUS = 100
-OBJECTS_IN_GOAL = False  # Flag to check if all objects are in the goal
-BROADCAST_RADIUS = 100
-TARGET_HOLD_TIME = 3000  # 3 seconds in milliseconds
-target_start_time = None  # Tracks when all objects entered the target
-QUEENS = 1
-WORKERS = 10
-LARVA = 0
-FOOD = 0
+FPS = 60
 
-def render_UI(screen, boids):
-    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
-    # PYGBAG: use built-in default font (works in browser); SysFont can be flaky
-    font = pygame.font.Font(None, 15)
+NUM_BOIDS = 50
+MAX_SPEED = 3.5
+MAX_FORCE = 0.08
 
-    a = 140
-    b = 10
-    c = 50
-    d = 10
+NEIGHBOR_RADIUS = 80
+SEPARATION_RADIUS = 24
 
-    button_add_boids = pygame.Rect(a, b, c, d)  # Button to add boids
-    button_remove_boids = pygame.Rect(a+60, b, c, d)  # Button to remove boids
-    button_add_speed = pygame.Rect(a, b+20, c, d)  # Button to increase speed
-    button_remove_speed = pygame.Rect(a+60, b+20, c, d)
-    button_add_force = pygame.Rect(a, b+40, c, d)  # Button to increase force
-    button_remove_force = pygame.Rect(a+60, b+40, c, d)
-    button_add_neighbor_radius = pygame.Rect(a, b+60, c, d)
-    button_remove_neighbor_radius = pygame.Rect(a+60, b+60, c, d)
-    button_add_separation_radius = pygame.Rect(a, b+80, c, d)
-    button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
-    button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
-    button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
-    button_hatch_worker = pygame.Rect(a+60, b+240, c+40, d)
-    button_hatch_queen = pygame.Rect(a+60, b+260, c+40, d)
+DRAW_FOV = False
+PAUSED = False
 
-    pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_speed)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_speed)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_force)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_force)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_neighbor_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_neighbor_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_hatch_worker)
-    pygame.draw.rect(screen, (255, 255, 255), button_hatch_queen)
+BG_COLOR = (10, 10, 12)
+BOID_COLOR = (220, 220, 240)
+FOV_COLOR = (60, 60, 80)
+TARGET_COLOR = (255, 180, 60)
 
-    for button, label in [
-            (button_add_boids, "+"),
-            (button_remove_boids, "-"),
-            (button_add_speed, "+"),
-            (button_remove_speed, "-"),
-            (button_add_force, "+"),
-            (button_remove_force, "-"),
-            (button_add_neighbor_radius, "+"),
-            (button_remove_neighbor_radius, "-"),
-            (button_add_separation_radius, "+"),
-            (button_remove_separation_radius, "-"),
-            (button_add_object_separation_radius, "+"),
-            (button_remove_object_separation_radius, "-")
-        ]:
-            text = font.render(label, True, (0, 0, 0))  # Black text
-            text_rect = text.get_rect(center=button.center)
-            screen.blit(text, text_rect)
+TARGET_ATTRACTION = 0.05
 
-    boid_count_text = font.render(f"Ants: {len(boids)}", True, (255, 255, 255))  # White text
-    max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
-    max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
-    neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
-    separation_radius_text = font.render(f"Separation Radius: {SEPARATION_RADIUS}", True, (255, 255, 255))
-    width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
-    height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
-    object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
-    queens_text = font.render(f"Queens: {QUEENS}", True, (255, 255, 255))
-    larva_text = font.render(f"Larva: {LARVA}", True, (255, 255, 255))
-    food_text = font.render(f"Food: {FOOD}", True, (255, 255, 255))
-    worker_text = font.render(f"Workers: {len(boids)}", True, (255, 255, 255))
-    hatch_worker_text = font.render(f"Hatch Worker for 10 food and 1 larva", True, (255, 255, 255))
-    hatch_queen_text = font.render(f"Hatch Queen for 500 food and 10 larva", True, (255, 255, 255))
+def clamp_mag(vec: pygame.math.Vector2, max_mag: float) -> pygame.math.Vector2:
+    m = vec.length()
+    if m > max_mag:
+        vec.scale_to_length(max_mag)
+    return vec
 
-    # Draw it on screen at top-left
-    screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
-    screen.blit(max_speed_text, (10, 30))
-    screen.blit(max_force_text, (10, 50))
-    screen.blit(neighbor_radius_text, (10, 70))
-    screen.blit(separation_radius_text, (10, 90))
-    screen.blit(object_separation_radius_text, (10, 110))
-    screen.blit(width_text, (10, 130))
-    screen.blit(height_text, (10, 150))
-    screen.blit(queens_text, (10, 170))
-    screen.blit(larva_text, (10, 190))
-    screen.blit(food_text, (10, 210))
-    screen.blit(worker_text, (10, 230))
-    screen.blit(hatch_worker_text, (10, 250))
-    screen.blit(hatch_queen_text, (10, 270))
-
-    return [
-        button_add_boids,
-        button_remove_boids,
-        button_add_speed,
-        button_remove_speed,
-        button_add_force,
-        button_remove_force,
-        button_add_neighbor_radius,
-        button_remove_neighbor_radius,
-        button_add_separation_radius,
-        button_remove_separation_radius,
-        button_add_object_separation_radius,
-        button_remove_object_separation_radius,
-        button_hatch_worker,
-        button_hatch_queen,
-    ]
-
-# Declare mouse_held as a global variable
-mouse_held = False
-last_add_time = 0  # Initialize outside the function
-
-def manage_UI(buttons, boids, movable_objects):
-    global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, mouse_held, last_add_time, FOOD, LARVA, WORKERS, QUEENS
-    dragging_object = False  # Flag to check if an object is being dragged
-
-    button_add_boids = buttons[0]
-    button_remove_boids = buttons[1]
-    button_add_speed = buttons[2]
-    button_remove_speed = buttons[3]
-    button_add_force = buttons[4]
-    button_remove_force = buttons[5]
-    button_add_neighbor_radius = buttons[6]
-    button_remove_neighbor_radius = buttons[7]
-    button_add_separation_radius = buttons[8]
-    button_remove_separation_radius = buttons[9]
-    button_add_object_separation_radius = buttons[10]
-    button_remove_object_separation_radius = buttons[11]
-    button_hatch_worker = buttons[12]
-    button_hatch_queen = buttons[13]
-    
-    dragging = False
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            return False
-        # PYGBAG: avoid resizing the canvas here; keep the browser-managed size
-        # if event.type == pygame.VIDEORESIZE:
-        #     WIDTH, HEIGHT = event.w, event.h
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mouse_held = True
-            for obj in movable_objects:
-                if (obj.position - pygame.Vector2(event.pos)).length() < obj.size:
-                    obj.is_dragging = True
-                    dragging = True
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            mouse_held = False
-            for obj in movable_objects:
-                obj.is_dragging = False
-                obj.velocity = pygame.Vector2(0, 0)
-                dragging = False
-        elif event.type == pygame.MOUSEMOTION:
-            for obj in movable_objects:
-                if obj.is_dragging:
-                    obj.position = pygame.Vector2(event.pos)
-                    dragging = True
-
-    # Get the current time
-    current_time = pygame.time.get_ticks()
-
-    # Check if the mouse is held and throttle actions
-    if not dragging and mouse_held and current_time - last_add_time > 50:  # 50ms delay
-        mouse_pos = pygame.mouse.get_pos()
-
-        if button_add_boids.collidepoint(mouse_pos):
-            new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-            boids.append(new_boid)
-        elif button_remove_boids.collidepoint(mouse_pos):
-            if boids:
-                boids.pop()
-        elif button_add_speed.collidepoint(mouse_pos):
-            MAX_SPEED += 1
-        elif button_remove_speed.collidepoint(mouse_pos):
-            if MAX_SPEED > 1:
-                MAX_SPEED -= 1
-        elif button_add_force.collidepoint(mouse_pos):
-            MAX_FORCE += 0.1
-        elif button_remove_force.collidepoint(mouse_pos):
-            if MAX_FORCE > 0.1:
-                MAX_FORCE -= 0.1
-        elif button_add_neighbor_radius.collidepoint(mouse_pos):
-            NEIGHBOR_RADIUS += 10
-        elif button_remove_neighbor_radius.collidepoint(mouse_pos):
-            if NEIGHBOR_RADIUS > 10:
-                NEIGHBOR_RADIUS -= 10
-        elif button_add_separation_radius.collidepoint(mouse_pos):
-            SEPARATION_RADIUS += 10
-        elif button_remove_separation_radius.collidepoint(mouse_pos):
-            if SEPARATION_RADIUS > 10:
-                SEPARATION_RADIUS -= 10
-        elif button_add_object_separation_radius.collidepoint(mouse_pos):
-            OBJECT_SEPERATION_RADIUS += 10
-        elif button_remove_object_separation_radius.collidepoint(mouse_pos):
-            if OBJECT_SEPERATION_RADIUS > 10:
-                OBJECT_SEPERATION_RADIUS -= 10
-        elif button_hatch_worker.collidepoint(mouse_pos):
-            if FOOD >= 10 and LARVA >= 1:
-                FOOD -= 10
-                LARVA -= 1
-                WORKERS += 1
-                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-                boids.append(new_boid)
-        elif button_hatch_queen.collidepoint(mouse_pos):
-            if FOOD >= 500 and LARVA >= 10:
-                FOOD -= 500
-                LARVA -= 10
-                QUEENS += 1
-                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-                boids.append(new_boid)
-
-        # Update the last action time
-        last_add_time = current_time
-
-    return True
-
-class MovableObject:
-    def __init__(self, x, y):
-        self.position = pygame.Vector2(x, y)
-        self.velocity = pygame.Vector2(0, 0)
-        self.size = 20  # radius for simplicity
-        self.mass = 5
-        self.is_dragging = False  # Flag to check if the object is being dragged
-        self.held_in_goal = False
-        self.last_goal_time = None
-        self.object_remains_in_goal_time = None  # Flag to check if an object remains in the goal for too long
-        #self.last_goal_time = None  # Track when the object was last in the goal
-
-    def update(self, target_position):
-        global TARGET_HOLD_TIME
-        if not self.is_dragging:
-            self.position += self.velocity
-            self.velocity *= 0.95  # friction / damping
-            if self.position.x <= 0 or self.position.x >= WIDTH:
-                self.velocity.x *= -1
-                # Clamp inside bounds
-                self.position.x = max(0, min(self.position.x, WIDTH))
-
-            if self.position.y <= 0 or self.position.y >= HEIGHT:
-                self.velocity.y *= -1
-                # Clamp inside bounds
-                self.position.y = max(0, min(self.position.y, HEIGHT))
-        if self.position == target_position:
-            if self.last_goal_time is None:
-                self.last_goal_time = pygame.time.get_ticks()
-            if pygame.time.get_ticks() - self.last_goal_time > TARGET_HOLD_TIME:
-                self.held_in_goal = True
-            self.last_goal_time = pygame.time.get_ticks()
-        else:
-            self.held_in_goal = False
-
-    def apply_force(self, force):
-        if not self.is_dragging:
-            self.velocity += force / self.mass
-
-    def draw(self, screen):
-        pygame.draw.circle(screen, (255, 255, 0), self.position, self.size)
+def steer_towards(current_vel: pygame.math.Vector2,
+                  desired: pygame.math.Vector2,
+                  max_force: float) -> pygame.math.Vector2:
+    steer = desired - current_vel
+    return clamp_mag(steer, max_force)
 
 class Boid:
-    ant_image = None
-    ant_image_path = os.path.join(os.path.dirname(__file__), "ant.png")
+    __slots__ = ("pos", "vel")
     def __init__(self, x, y):
-        # Initialize position and velocity
-        self.position = pygame.Vector2(x, y)
+        self.pos = pygame.math.Vector2(x, y)
         angle = random.uniform(0, 2 * math.pi)
-        self.velocity = pygame.Vector2(math.cos(angle), math.sin(angle)) * MAX_SPEED
-        self.acceleration = pygame.Vector2(0, 0)
-        self.color = (255, 0, 0)
-        self.signal_time = pygame.time.get_ticks()
-        self.goal_location = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
-        self.has_received = False  # Flag to check if boid has received a message
-        # Load ant image once for all boids
-        if Boid.ant_image is None:
-            try:
-                img = pygame.image.load(Boid.ant_image_path).convert_alpha()
-                Boid.ant_image = pygame.transform.smoothscale(img, (32, 32))
-            except Exception as e:
-                print(f"Error loading ant.png: {e}")
-                Boid.ant_image = None
+        self.vel = pygame.math.Vector2(math.cos(angle), math.sin(angle))
+        self.vel.scale_to_length(MAX_SPEED * 0.5)
 
-    def update(self, blocks, WIDTH, HEIGHT):
-        # Update velocity and position
-        self.velocity += self.acceleration
-        if self.velocity.length() > MAX_SPEED:
-            self.velocity.scale_to_length(MAX_SPEED)
-        self.position += self.velocity
-        self.acceleration *= 0
-        
-        if pygame.time.get_ticks() - self.signal_time > 100:
-            self.color = (255, 255, 255)
+    def update(self, accel, dt):
+        self.vel += accel
+        clamp_mag(self.vel, MAX_SPEED)
+        self.pos += self.vel * dt
+        if self.pos.x < 0: self.pos.x += WIDTH
+        elif self.pos.x >= WIDTH: self.pos.x -= WIDTH
+        if self.pos.y < 0: self.pos.y += HEIGHT
+        elif self.pos.y >= HEIGHT: self.pos.y -= HEIGHT
 
-        # Screen bouncing
-        if self.position.x <= 0 or self.position.x >= WIDTH:
-            self.velocity.x *= -1
-            # Clamp inside bounds
-            self.position.x = max(0, min(self.position.x, WIDTH))
+    def draw(self, surf):
+        forward = self.vel.normalize() if self.vel.length_squared() > 1e-6 else pygame.math.Vector2(1, 0)
+        left = pygame.math.Vector2(-forward.y, forward.x)
+        tip = self.pos + forward * 8
+        base_left = self.pos - forward * 6 + left * 4
+        base_right = self.pos - forward * 6 - left * 4
+        pygame.draw.polygon(surf, BOID_COLOR, (tip, base_left, base_right))
 
-        if self.position.y <= 0 or self.position.y >= HEIGHT:
-            self.velocity.y *= -1
-            # Clamp inside bounds
-            self.position.y = max(0, min(self.position.y, HEIGHT))
-        
-        for block in blocks:
-            block_rect = block.get_rect()
-            boid_rect = pygame.Rect(self.position.x, self.position.y, 5, 5)  # A small rect for collision
-            if boid_rect.colliderect(block_rect):
-                # Simple bounce: reverse direction
-                # You can get fancier with angle of incidence/reflection later
-                if block_rect.left <= self.position.x <= block_rect.right:
-                    self.velocity.y *= -1
-                if block_rect.top <= self.position.y <= block_rect.bottom:
-                    self.velocity.x *= -1
+class Swarm:
+    def __init__(self, n_boids: int):
+        self.boids = [Boid(random.uniform(0, WIDTH), random.uniform(0, HEIGHT)) for _ in range(n_boids)]
+        self.target = None
 
-    def apply_force(self, force):
-        self.acceleration += force
+    def set_target(self, pos_or_none):
+        self.target = pos_or_none
 
-    def align(self, boids):
-        steering = pygame.Vector2(0, 0)
-        total = 0
-        for boid in boids:
-            if boid != self and self.position.distance_to(boid.position) < NEIGHBOR_RADIUS:
-                steering += boid.velocity
-                total += 1
-        if total > 0:
-            steering /= total
-            steering = (steering.normalize() * MAX_SPEED) - self.velocity
-            if steering.length() > MAX_FORCE:
-                steering.scale_to_length(MAX_FORCE)
-        return steering
+    def step(self, dt):
+        for i, b in enumerate(self.boids):
+            align = pygame.math.Vector2(0, 0)
+            coh = pygame.math.Vector2(0, 0)
+            sep = pygame.math.Vector2(0, 0)
+            total = 0
 
-    def cohesion(self, boids):
-        steering = pygame.Vector2(0, 0)
-        total = 0
-        for boid in boids:
-            if boid != self and self.position.distance_to(boid.position) < NEIGHBOR_RADIUS:
-                steering += boid.position
-                total += 1
-        if total > 0:
-            steering /= total
-            if (steering - self.position).length() > 0:
-                steering = (steering - self.position).normalize() * MAX_SPEED - self.velocity
-                if steering.length() > MAX_FORCE:
-                    steering.scale_to_length(MAX_FORCE)
-                return steering
-        return pygame.Vector2(0, 0)
+            for j, other in enumerate(self.boids):
+                if i == j: continue
+                offset = other.pos - b.pos
+                d2 = offset.length_squared()
+                if d2 < NEIGHBOR_RADIUS * NEIGHBOR_RADIUS:
+                    total += 1
+                    align += other.vel
+                    coh += other.pos
+                    if d2 < SEPARATION_RADIUS * SEPARATION_RADIUS and d2 > 0:
+                        sep -= offset / (math.sqrt(d2) + 1e-6)
 
-    def separation(self, boids, blocks):
-        steering = pygame.Vector2(0, 0)
-        total = 0
-        for boid in boids:
-            distance = self.position.distance_to(boid.position)
-            if boid != self and distance < SEPARATION_RADIUS:
-                diff = self.position - boid.position
-                if distance != 0:
-                    diff /= distance
-                steering += diff
-                total += 1
-        # After self.position += self.velocity
-        boid_rect = pygame.Rect(self.position.x, self.position.y, 5, 5)  # A small rect for collision
-        
-        for block in blocks:
-            distance = self.position.distance_to(block.position)
-            if distance < OBJECT_SEPERATION_RADIUS:
-                diff = self.position - block.position
-                if distance != 0:
-                    diff /= distance
-                steering += diff
-                total += 1
-            block = block.get_rect()
-        
-        if total > 0:
-            steering /= total
-        if steering.length() > 0:
-            steering = steering.normalize() * MAX_SPEED - self.velocity
-            if steering.length() > MAX_FORCE:
-                steering.scale_to_length(MAX_FORCE)
-        return steering
+            accel = pygame.math.Vector2(0, 0)
+            if total > 0:
+                align /= total
+                if align.length_squared() > 1e-12:
+                    align = align.normalize() * MAX_SPEED
+                accel += steer_towards(b.vel, align, MAX_FORCE)
 
-    def broadcast(self, boids, blocks, objects, goal_location):
-        for boid in boids:
-            if boid != self and not boid.has_received and self.position.distance_to(boid.position) < BROADCAST_RADIUS:
-                boid.recieve(boids, blocks, objects, goal_location)
+                coh /= total
+                desired_to_center = (coh - b.pos)
+                if desired_to_center.length_squared() > 1e-12:
+                    desired_to_center = desired_to_center.normalize() * MAX_SPEED
+                accel += steer_towards(b.vel, desired_to_center, MAX_FORCE * 0.85)
 
-    def recieve(self, boids, blocks, objects, goal_location):
-        if not self.has_received:
-            self.has_received = True
-            self.color = (0, 255, 0)
-            self.broadcast(boids, blocks, objects, goal_location)
-            self.goal_location = goal_location
-            self.signal_time = pygame.time.get_ticks()
-            self.attract_to_object(boids, blocks, objects, goal_location)
-            self.apply_force(self.move_to_location(self.goal_location))
-            self.flock(boids, blocks, objects, self.goal_location)
+                if sep.length_squared() > 1e-12:
+                    sep = sep.normalize() * MAX_SPEED
+                accel += steer_towards(b.vel, sep, MAX_FORCE * 1.2)
 
-    def scatter(self, boids, blocks, objects, target_position):
-        self.apply_force(pygame.Vector2(random.uniform(-1, 1), random.uniform(-1, 1)) * MAX_FORCE)
-        self.push_object(objects, target_position)
-        self.apply_force(self.attract_to_object(boids, blocks, objects, target_position))
+            if self.target is not None:
+                to_target = pygame.math.Vector2(self.target) - b.pos
+                if to_target.length_squared() > 1e-12:
+                    desired = to_target.normalize() * MAX_SPEED
+                    accel += steer_towards(b.vel, desired, MAX_FORCE) * TARGET_ATTRACTION
 
-    def push_object(self, objects, goal):
-        for obj in objects:
-            to_object = obj.position - self.position
-            if to_object.length() < 30:
-                # Modify this section in swarm-soccer.py
-                if (goal - obj.position).length() != 0:
-                    push_dir = (goal - obj.position).normalize()
-                else:
-                    push_dir = pygame.Vector2(0, 0)  # Fixed: Use pygame.Vector2 instead of Vector2
-                force = push_dir * OBJECT_PUSH_FORCE
-                obj.apply_force(force)
-    
-    def move_to_location(self, location):
-        direction = (location - self.position)
-        if direction.length() > 0:
-            direction = direction.normalize()
-        steer = direction * MAX_SPEED - self.velocity
-        if steer.length() > MAX_FORCE:
-            steer.scale_to_length(MAX_FORCE)
-        return steer
+            b.update(accel, dt)
 
-    def attract_to_object(self, boids, blocks, objects, target_position):
-        closest_object = None
-        min_distance = float('inf')
+    def draw(self, surf, draw_fov=False):
+        for b in self.boids:
+            b.draw(surf)
+            if draw_fov:
+                pygame.draw.circle(surf, FOV_COLOR, (int(b.pos.x), int(b.pos.y)), NEIGHBOR_RADIUS, 1)
+                pygame.draw.circle(surf, FOV_COLOR, (int(b.pos.x), int(b.pos.y)), SEPARATION_RADIUS, 1)
+        if self.target is not None:
+            pygame.draw.circle(surf, TARGET_COLOR, (int(self.target[0]), int(self.target[1])), 6)
 
-        # Find the closest object
-        for obj in objects:
-            # Check if the object is in the goal
-            if obj.position.distance_to(target_position) < 30:
-                if obj.object_remains_in_goal_time is None:
-                    #print(f"None")
-                    obj.object_remains_in_goal_time = pygame.time.get_ticks()
-                    print("Object entered the goal")
-                elif pygame.time.get_ticks() - obj.object_remains_in_goal_time > 7000:
-                    print(f"Skipping object {obj.position} because it remains in the goal for too long")
-                    continue  # Permanently skip this object
-
-            distance = self.position.distance_to(obj.position)
-            if distance < min_distance:
-                min_distance = distance
-                closest_object = obj
-
-        # If a closest object is found and within the attraction radius
-        if closest_object and min_distance < ATTRACTION_RADIUS:
-            self.broadcast(boids, blocks, objects, closest_object.position)
-            return self.move_to_location(closest_object.position)
-
-        return pygame.Vector2(0, 0)
-
-    def resolve_collision_with_ball(self, objects):
-        for ball in objects:
-            distance = self.position.distance_to(ball.position)
-            overlap = ball.size + 5 - distance  # 5 is boid "radius"
-
-            if overlap > 0:
-                # Push boid away from ball
-                push_dir = (self.position - ball.position).normalize()
-                self.position += push_dir * overlap  # move boid out
-                self.velocity.reflect_ip(push_dir)  # reflect direction
-
-                # Optional: also apply a force to the ball (Newton's Third Law)
-                ball.apply_force(-push_dir * 0.5)  # tweak force amount
-
-
-    def flock(self, boids, blocks, objects, target_position):
-        # Apply the three main forces
-        alignment = self.align(boids)
-        cohesion = self.cohesion(boids)
-        separation = self.separation(boids, blocks)
-
-        # Weigh the forces
-        self.apply_force(alignment * 1.0)
-        self.apply_force(cohesion * 1.0)
-        self.apply_force(separation * 1.5)
-
-    def draw(self, screen):
-        # Draw the ant sprite, rotated to match velocity direction
-        if Boid.ant_image:
-            angle = math.degrees(math.atan2(-self.velocity.y, self.velocity.x)) - 90
-            rotated = pygame.transform.rotate(Boid.ant_image, angle)
-            rect = rotated.get_rect(center=(self.position.x, self.position.y))
-            screen.blit(rotated, rect)
-        else:
-            # fallback: draw a red circle
-            pygame.draw.circle(screen, (255,0,0), (int(self.position.x), int(self.position.y)), 8)
-
-# --- make the main loop async for pygbag ---
-import asyncio
+def draw_ui(screen, fps, boid_count, paused):
+    font = pygame.font.SysFont(None, 20)
+    lines = [
+        f"FPS: {fps:.0f}",
+        f"Boids: {boid_count}",
+        f"{'PAUSED' if paused else 'RUNNING'}",
+        "Mouse click: toggle target",
+        "Space: pause/resume | F: toggle FOV | +/-: boids | R: reset",
+    ]
+    y = 8
+    for line in lines:
+        surf = font.render(line, True, (200, 200, 210))
+        screen.blit(surf, (8, y))
+        y += 18
 
 async def main():
-    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, WIDTH, HEIGHT, OBJECT_SEPERATION_RADIUS, OBJECTS_IN_GOAL, LARVA, QUEENS, FOOD
-
     pygame.init()
-    # PYGBAG: use SCALED so the canvas matches CSS size and looks crisp
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
-    pygame.display.set_caption("Swarm Simulation")
-    clock = pygame.time.Clock()
-    last_add_time = pygame.time.get_ticks()
-    init_goal_time = pygame.time.get_ticks()
-
-    # Keep mixer off in web
     try:
         pygame.mixer.quit()
     except Exception:
         pass
-
-    # Create boids
-    boids = [Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(NUM_BOIDS)]
-    movable_object_1 = MovableObject(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-    movable_object_2 = MovableObject(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-    movable_object_3 = MovableObject(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-
-    objects = [movable_object_1, movable_object_2, movable_object_3]
-    blocks = []
-
-    # Target position
-    target_position = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
-    target_radius = 40
-
-    one_second_ticker = pygame.time.get_ticks()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Swarms (pygbag)")
+    clock = pygame.time.Clock()
+    swarm = Swarm(NUM_BOIDS)
+    global PAUSED, DRAW_FOV
 
     running = True
     while running:
-        screen.fill((0, 100, 0))  # RGB for dark green
-        
-        # Draw a black filled circle in the middle of the screen as the base
-        base_center = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
-        base_radius = 40
-        pygame.draw.circle(screen, (0, 0, 0), base_center, base_radius)  # filled black # Draw base
-        
-        buttons = render_UI(screen, boids)
-        running = manage_UI(buttons, boids, objects)
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                running = False
+            elif e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_ESCAPE:
+                    running = False
+                elif e.key == pygame.K_SPACE:
+                    PAUSED = not PAUSED
+                elif e.key == pygame.K_f:
+                    DRAW_FOV = not DRAW_FOV
+                elif e.key in (pygame.K_PLUS, pygame.K_EQUALS):
+                    swarm.boids.append(Boid(random.uniform(0, WIDTH), random.uniform(0, HEIGHT)))
+                elif e.key == pygame.K_MINUS and len(swarm.boids) > 1:
+                    swarm.boids.pop()
+                elif e.key == pygame.K_r:
+                    swarm = Swarm(NUM_BOIDS)
+            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                pos = pygame.mouse.get_pos()
+                if swarm.target is None:
+                    swarm.set_target(pos)
+                else:
+                    old = pygame.math.Vector2(swarm.target)
+                    if (old - pygame.math.Vector2(pos)).length() < 12:
+                        swarm.set_target(None)
+                    else:
+                        swarm.set_target(pos)
 
-        # Update and draw boids
-        for boid in boids:
-            boid.scatter(boids, blocks, objects, target_position)
-            boid.update(blocks, WIDTH, HEIGHT)
-            boid.resolve_collision_with_ball(objects)
-            boid.draw(screen)
-            boid.has_received = False  # Reset the flag after each update
-        
-        for block in blocks:
-            block.draw(screen)
-        
-        for obj in objects:
-            obj.update(target_position)
-            obj.draw(screen)
-        
-        now = pygame.time.get_ticks()
-        if now - one_second_ticker >= 1000:
-            LARVA += QUEENS*2 # Each queen produces 2 larva per second
-            FOOD += WORKERS # Each worker brings in 1 food per second
-            one_second_ticker = now
-    
+        dt = clock.tick(FPS) / 1000.0
+        if not PAUSED:
+            swarm.step(dt)
+
+        screen.fill(BG_COLOR)
+        swarm.draw(screen, draw_fov=DRAW_FOV)
+        draw_ui(screen, clock.get_fps(), len(swarm.boids), PAUSED)
         pygame.display.flip()
-        clock.tick(30)
 
-        # PYGBAG: yield to the browser so events/render can happen
+        # CRITICAL for pygbag/browser
         await asyncio.sleep(0)
 
     pygame.quit()
 
-# --- show exceptions in the browser console so we don't see a silent black screen ---
-async def _run():
-    try:
-        await main()
-    except Exception:
-        import traceback
-        traceback.print_exc()
-        raise
-
 if __name__ == "__main__":
-    asyncio.run(_run())
+    asyncio.run(main())
